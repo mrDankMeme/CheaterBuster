@@ -15,7 +15,8 @@ struct CheaterBusterApp: App {
     
     var body: some Scene {
         WindowGroup {
-            DemoView().environment(\.resolver, assembler.resolver)
+            RootTabView()
+                .environment(\.resolver, assembler.resolver)
         }
     }
 }

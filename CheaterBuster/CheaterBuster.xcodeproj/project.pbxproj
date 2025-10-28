@@ -13,11 +13,8 @@
 		A35FF3542EB005F00000E890 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3532EB005ED0000E890 /* DesignTokens.swift */; };
 		A35FF3572EB00CE80000E890 /* PrimaryButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3562EB00CE80000E890 /* PrimaryButton.swift */; };
 		A35FF3592EB00CF10000E890 /* SearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3582EB00CF10000E890 /* SearchField.swift */; };
-		A35FF3682EB0CEDA0000E890 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3672EB0CEDA0000E890 /* AppDelegate.swift */; };
-		A35FF36A2EB0CF510000E890 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3692EB0CF470000E890 /* SceneDelegate.swift */; };
 		A35FF36D2EB0CF930000E890 /* Swinject in Frameworks */ = {isa = PBXBuildFile; productRef = A35FF36C2EB0CF930000E890 /* Swinject */; };
-		A35FF36F2EB0CFE80000E890 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF36E2EB0CFE40000E890 /* AppCoordinator.swift */; };
-		A35FF3712EB0D3330000E890 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3702EB0D32F0000E890 /* SettingsView.swift */; };
+		A35FF3712EB0D3330000E890 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3702EB0D32F0000E890 /* SettingsScreen.swift */; };
 		A35FF3732EB0D3460000E890 /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3722EB0D3360000E890 /* SettingsViewModel.swift */; };
 		A35FF3752EB0D8350000E890 /* AppAssembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3742EB0D8300000E890 /* AppAssembler.swift */; };
 		A35FF3782EB0D8B70000E890 /* Environment+Resolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3772EB0D8B50000E890 /* Environment+Resolver.swift */; };
@@ -36,6 +33,10 @@
 		A35FF3922EB0FC040000E890 /* HistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3912EB0FBFE0000E890 /* HistoryViewModel.swift */; };
 		A35FF3942EB0FCF20000E890 /* ServicesAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3932EB0FCED0000E890 /* ServicesAssembly.swift */; };
 		A35FF3962EB0FEBB0000E890 /* ViewModelsAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3952EB0FEB50000E890 /* ViewModelsAssembly.swift */; };
+		A35FF3982EB1047A0000E890 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3972EB104760000E890 /* RootTabView.swift */; };
+		A35FF39A2EB104A30000E890 /* SearchScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3992EB1049F0000E890 /* SearchScreen.swift */; };
+		A35FF39C2EB106150000E890 /* CheaterScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF39B2EB1060F0000E890 /* CheaterScreen.swift */; };
+		A35FF39E2EB107420000E890 /* HistoryScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF39D2EB1073A0000E890 /* HistoryScreen.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -46,10 +47,7 @@
 		A35FF3532EB005ED0000E890 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		A35FF3562EB00CE80000E890 /* PrimaryButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimaryButton.swift; sourceTree = "<group>"; };
 		A35FF3582EB00CF10000E890 /* SearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchField.swift; sourceTree = "<group>"; };
-		A35FF3672EB0CEDA0000E890 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		A35FF3692EB0CF470000E890 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		A35FF36E2EB0CFE40000E890 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
-		A35FF3702EB0D32F0000E890 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A35FF3702EB0D32F0000E890 /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
 		A35FF3722EB0D3360000E890 /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
 		A35FF3742EB0D8300000E890 /* AppAssembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAssembler.swift; sourceTree = "<group>"; };
 		A35FF3772EB0D8B50000E890 /* Environment+Resolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Environment+Resolver.swift"; sourceTree = "<group>"; };
@@ -68,6 +66,10 @@
 		A35FF3912EB0FBFE0000E890 /* HistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryViewModel.swift; sourceTree = "<group>"; };
 		A35FF3932EB0FCED0000E890 /* ServicesAssembly.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServicesAssembly.swift; sourceTree = "<group>"; };
 		A35FF3952EB0FEB50000E890 /* ViewModelsAssembly.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewModelsAssembly.swift; sourceTree = "<group>"; };
+		A35FF3972EB104760000E890 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
+		A35FF3992EB1049F0000E890 /* SearchScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchScreen.swift; sourceTree = "<group>"; };
+		A35FF39B2EB1060F0000E890 /* CheaterScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheaterScreen.swift; sourceTree = "<group>"; };
+		A35FF39D2EB1073A0000E890 /* HistoryScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryScreen.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -142,13 +144,11 @@
 		A35FF35A2EB0CDF10000E890 /* Application */ = {
 			isa = PBXGroup;
 			children = (
+				A35FF3972EB104760000E890 /* RootTabView.swift */,
 				A35FF3952EB0FEB50000E890 /* ViewModelsAssembly.swift */,
 				A35FF3932EB0FCED0000E890 /* ServicesAssembly.swift */,
 				A35FF34C2EB005DD0000E890 /* CheaterBusterApp.swift */,
 				A35FF3742EB0D8300000E890 /* AppAssembler.swift */,
-				A35FF3672EB0CEDA0000E890 /* AppDelegate.swift */,
-				A35FF3692EB0CF470000E890 /* SceneDelegate.swift */,
-				A35FF36E2EB0CFE40000E890 /* AppCoordinator.swift */,
 			);
 			path = Application;
 			sourceTree = "<group>";
@@ -185,6 +185,7 @@
 		A35FF35F2EB0CE280000E890 /* Search */ = {
 			isa = PBXGroup;
 			children = (
+				A35FF3992EB1049F0000E890 /* SearchScreen.swift */,
 				A35FF38D2EB0F1EF0000E890 /* SearchViewModel.swift */,
 			);
 			path = Search;
@@ -193,6 +194,7 @@
 		A35FF3602EB0CE310000E890 /* Cheater */ = {
 			isa = PBXGroup;
 			children = (
+				A35FF39B2EB1060F0000E890 /* CheaterScreen.swift */,
 				A35FF38F2EB0F4270000E890 /* CheaterViewModel.swift */,
 			);
 			path = Cheater;
@@ -201,6 +203,7 @@
 		A35FF3612EB0CE3E0000E890 /* History */ = {
 			isa = PBXGroup;
 			children = (
+				A35FF39D2EB1073A0000E890 /* HistoryScreen.swift */,
 				A35FF3912EB0FBFE0000E890 /* HistoryViewModel.swift */,
 			);
 			path = History;
@@ -210,7 +213,7 @@
 			isa = PBXGroup;
 			children = (
 				A35FF3722EB0D3360000E890 /* SettingsViewModel.swift */,
-				A35FF3702EB0D32F0000E890 /* SettingsView.swift */,
+				A35FF3702EB0D32F0000E890 /* SettingsScreen.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -329,12 +332,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A35FF3682EB0CEDA0000E890 /* AppDelegate.swift in Sources */,
 				A35FF3942EB0FCF20000E890 /* ServicesAssembly.swift in Sources */,
-				A35FF36A2EB0CF510000E890 /* SceneDelegate.swift in Sources */,
 				A35FF38C2EB0F1090000E890 /* SettingsStoreImpl.swift in Sources */,
 				A35FF3502EB005DD0000E890 /* CheaterBusterApp.swift in Sources */,
-				A35FF3712EB0D3330000E890 /* SettingsView.swift in Sources */,
+				A35FF3712EB0D3330000E890 /* SettingsScreen.swift in Sources */,
 				A35FF3882EB0ED3F0000E890 /* CheaterAnalyzerServiceImpl.swift in Sources */,
 				A35FF3842EB0EA100000E890 /* SettingsStore.swift in Sources */,
 				A35FF3592EB00CF10000E890 /* SearchField.swift in Sources */,
@@ -342,14 +343,17 @@
 				A35FF3902EB0F42E0000E890 /* CheaterViewModel.swift in Sources */,
 				A35FF3922EB0FC040000E890 /* HistoryViewModel.swift in Sources */,
 				A35FF3732EB0D3460000E890 /* SettingsViewModel.swift in Sources */,
+				A35FF3982EB1047A0000E890 /* RootTabView.swift in Sources */,
 				A35FF3752EB0D8350000E890 /* AppAssembler.swift in Sources */,
 				A35FF3822EB0E9350000E890 /* HistoryStore.swift in Sources */,
 				A35FF3962EB0FEBB0000E890 /* ViewModelsAssembly.swift in Sources */,
-				A35FF36F2EB0CFE80000E890 /* AppCoordinator.swift in Sources */,
 				A35FF3542EB005F00000E890 /* DesignTokens.swift in Sources */,
 				A35FF38E2EB0F1F30000E890 /* SearchViewModel.swift in Sources */,
+				A35FF39A2EB104A30000E890 /* SearchScreen.swift in Sources */,
 				A35FF3802EB0E8DE0000E890 /* CheaterAnalyzerService.swift in Sources */,
 				A35FF3572EB00CE80000E890 /* PrimaryButton.swift in Sources */,
+				A35FF39E2EB107420000E890 /* HistoryScreen.swift in Sources */,
+				A35FF39C2EB106150000E890 /* CheaterScreen.swift in Sources */,
 				A35FF3512EB005DD0000E890 /* DemoView.swift in Sources */,
 				A35FF37E2EB0E80C0000E890 /* SearchService.swift in Sources */,
 				A35FF38A2EB0EE380000E890 /* HistoryStoreImpl.swift in Sources */,
