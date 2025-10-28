@@ -1,0 +1,315 @@
+//
+//  ContentView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/27/25.
+//
+
+
+import SwiftUI
+
+struct DemoView: View {
+    @State private var query = ""
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: Tokens.Spacing.x24) {
+                SearchField("Partner's name...", text: $query)
+
+                PrimaryButton("Find", isDisabled: query.isEmpty) {
+                    // позже добавим действие
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.top, Tokens.Spacing.x24)
+            .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+            .navigationTitle("CheaterBuster")
+        }
+    }
+}
+
+#Preview {
+    DemoView()
+        .environment(\.colorScheme, .light)
+}
+//
+//  PrimaryButton.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/27/25.
+//
+
+
+import SwiftUI
+
+public struct PrimaryButton: View {
+    public enum Size { case large, medium }
+
+    let title: String
+    let size: Size
+    let isLoading: Bool
+    let isDisabled: Bool
+    let action: () -> Void
+
+    public init(_ title: String,
+                size: Size = .large,
+                isLoading: Bool = false,
+                isDisabled: Bool = false,
+                action: @escaping () -> Void) {
+        self.title = title
+        self.size = size
+        self.isLoading = isLoading
+        self.isDisabled = isDisabled
+        self.action = action
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            ZStack {
+                if isLoading {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Text(title)
+                        .font(Tokens.Font.subtitle)
+                        .foregroundColor(.white)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, size == .large ? 16 : 12)
+            .background(isDisabled ? Tokens.Color.accentPressed : Tokens.Color.accent)
+            .cornerRadius(Tokens.Radius.pill)
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled || isLoading)
+    }
+}
+
+#Preview {
+    VStack(spacing: 16) {
+        PrimaryButton("Find") {}
+        PrimaryButton("Find", isLoading: true) {}
+        PrimaryButton("Find", isDisabled: true) {}
+    }
+    .padding()
+    .background(Tokens.Color.backgroundMain)
+}
+//
+//  SearchField.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/27/25.
+//
+
+
+import SwiftUI
+
+public struct SearchField: View {
+    @Binding var text: String
+    var placeholder: String
+    var onCommit: (() -> Void)?
+    var onCancel: (() -> Void)?
+
+    @FocusState private var focused: Bool
+
+    public init(_ placeholder: String,
+                text: Binding<String>,
+                onCommit: (() -> Void)? = nil,
+                onCancel: (() -> Void)? = nil) {
+        self.placeholder = placeholder
+        self._text = text
+        self.onCommit = onCommit
+        self.onCancel = onCancel
+    }
+
+    public var body: some View {
+        HStack(spacing: Tokens.Spacing.x12) {
+            HStack(spacing: Tokens.Spacing.x12) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(Tokens.Color.textSecondary)
+
+                TextField(placeholder, text: $text)
+                    .font(Tokens.Font.body)
+                    .foregroundColor(Tokens.Color.textPrimary)
+                    .focused($focused)
+                    .submitLabel(.search)
+                    .onSubmit { onCommit?() }
+
+                if !text.isEmpty {
+                    Button {
+                        text = ""
+                    } label: {
+                        Image(systemName: "xmark")
+                            .foregroundColor(Tokens.Color.textSecondary)
+                    }
+                }
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.vertical, 12)
+            .background(Tokens.Color.surfaceCard)
+            .cornerRadius(Tokens.Radius.pill)
+            .overlay(
+                RoundedRectangle(cornerRadius: Tokens.Radius.pill)
+                    .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+            )
+            .apply(Tokens.Shadow.card)
+
+            if focused {
+                Button("Cancel") {
+                    text = ""
+                    focused = false
+                    onCancel?()
+                }
+                .font(Tokens.Font.body)
+                .foregroundColor(Tokens.Color.textSecondary)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: focused)
+    }
+}
+//
+//  DesignTokens.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/27/25.
+//
+
+import SwiftUI
+
+public enum Tokens {
+    
+    // MARK: Colors (Figma -> SwiftUI)
+    public enum Color {
+        public static let accent = SwiftUI.Color("Accent")
+        public static let accentPressed = SwiftUI.Color("AccentPressed")
+        
+        public static let textPrimary = SwiftUI.Color("TextPrimary")
+        public static let textSecondary = SwiftUI.Color("TextSecondary")
+        
+        public static let borderNeutral = SwiftUI.Color("BorderNeutral")
+        
+        public static let backgroundMain = SwiftUI.Color("BackgroundMain")
+        public static let surfaceCard = SwiftUI.Color("SurfaceCard")
+    }
+    
+    //MARK: Typography (SF Pro)
+    public enum Font {
+        public static let h1 = SwiftUI.Font.system(size:32, weight: .semibold)
+        public static let h2 = SwiftUI.Font.system(size:28, weight: .medium)
+        public static let title = SwiftUI.Font.system(size:22, weight: .medium)
+        public static let subtitle = SwiftUI.Font.system(size:20, weight: .bold)
+        public static let body = SwiftUI.Font.system(size:20, weight: .regular)
+        public static let bodyMedium18 = SwiftUI.Font.system(size:18, weight: .medium)
+        static let bodyMedium = SwiftUI.Font.system(size: 16, weight: .medium)
+        public static let caption = SwiftUI.Font.system(size: 15, weight: .medium)
+        public static let captionRegular = SwiftUI.Font.system(size: 15, weight: .regular)
+    }
+    
+    //MARK: Spacing & Radius
+    
+    public enum Spacing {
+        public static let x4:  CGFloat = 4
+        public static let x8:  CGFloat = 8
+        public static let x12: CGFloat = 12
+        public static let x16: CGFloat = 16
+        public static let x20: CGFloat = 20
+        public static let x24: CGFloat = 24
+        public static let x32: CGFloat = 32
+    }
+    
+    public enum Radius {
+        public static let pill:   CGFloat = 24
+        public static let medium: CGFloat = 16
+        public static let small:  CGFloat = 12
+    }
+    
+    // MARK: Shadow
+    public enum Shadow {
+        public static let card = ShadowStyle(
+            color: .black.opacity(0.07),
+            radius: 12,
+            y: 6
+        )
+    }
+    
+}
+
+// MARK: Helpers
+public struct ShadowStyle {
+    public let color: Color
+    public let radius: CGFloat
+    public let y: CGFloat
+}
+
+public extension View {
+    func apply(_ shadow: ShadowStyle) -> some View {
+        self.shadow(color: shadow.color, radius: shadow.radius, x: 0, y: shadow.y)
+    }
+}
+//
+//  CheaterBusterApp.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/27/25.
+//
+
+import SwiftUI
+
+@main
+struct CheaterBusterApp: App {
+    var body: some Scene {
+        WindowGroup {
+            DemoView()
+        }
+    }
+}
+//
+//  AppCoordinator.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import Foundation
+import Swinject
+//
+//  AppDelegate.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import UIKit
+
+@main
+final class AppDelegate: UIResponder, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        true
+    }
+
+    func application(_ application: UIApplication,
+                     configurationForConnecting connectingSceneSession: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+    }
+}
+//
+//  SceneDelegate.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import UIKit
+import Swinject
+
+
+final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
+    
+}

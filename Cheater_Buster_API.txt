@@ -1,0 +1,719 @@
+
+Task
+
+
+POST
+/api/task
+Create And Run Conversation Analyze Task
+
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+multipart/form-data
+files
+array<string> | (array<string> | null)
+conversation
+string | (string | null)
+app_bundle *
+string
+webhook_url
+string | (string | null)($uri)
+maxLength: 2083
+minLength: 1
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "status": "queued",
+  "result": {
+    "risk_score": 0,
+    "red_flags": [
+      "string"
+    ],
+    "recommendations": [
+      "string"
+    ]
+  },
+  "error": "string"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+POST
+/api/task/place
+Create And Run Place Search Task
+
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+multipart/form-data
+file *
+string($binary)
+conversation
+string | (string | null)
+app_bundle *
+string
+webhook_url
+string | (string | null)($uri)
+maxLength: 2083
+minLength: 1
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "status": "queued",
+  "result": {
+    "risk_score": 0,
+    "red_flags": [
+      "string"
+    ],
+    "recommendations": [
+      "string"
+    ]
+  },
+  "error": "string"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+GET
+/api/task/{task_id}
+Get Task
+
+
+Parameters
+Try it out
+Name	Description
+task_id *
+string($uuid)
+(path)
+task_id
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "status": "queued",
+  "result": {
+    "risk_score": 0,
+    "red_flags": [
+      "string"
+    ],
+    "recommendations": [
+      "string"
+    ]
+  },
+  "error": "string"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+Search
+
+
+POST
+/api/search
+Create Reverse Search Task
+
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+multipart/form-data
+image *
+string($binary)
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "task_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+GET
+/api/search/{task_id}
+Get Reverse Search Task
+
+
+Parameters
+Try it out
+Name	Description
+task_id *
+string($uuid)
+(path)
+task_id
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "status": {
+    "google": "completed",
+    "yandex": "completed",
+    "bing": "completed"
+  },
+  "results": {
+    "google": {
+      "search_metadata": {
+        "id": "string",
+        "status": "string",
+        "json_endpoint": "string",
+        "created_at": "string",
+        "processed_at": "string",
+        "google_lens_url": "string",
+        "raw_html_file": "string",
+        "total_time_taken": 0
+      },
+      "search_parameters": {
+        "engine": "string",
+        "url": "string"
+      },
+      "visual_matches": [
+        {
+          "position": 0,
+          "title": "string",
+          "link": "string",
+          "source": "string",
+          "source_icon": "string",
+          "thumbnail": "string",
+          "thumbnail_width": 0,
+          "thumbnail_height": 0,
+          "image": "string",
+          "image_width": 0,
+          "image_height": 0
+        }
+      ]
+    },
+    "yandex": {
+      "knowledge_graph": [
+        {
+          "title": "string",
+          "subtitle": "string",
+          "description": "string",
+          "link": "string",
+          "source": "string",
+          "thumbnail": "string"
+        }
+      ],
+      "image_tags": [
+        {
+          "text": "string",
+          "link": "string",
+          "serpapi_link": "string"
+        }
+      ],
+      "image_results": [
+        {
+          "title": "string",
+          "snippet": "string",
+          "link": "string",
+          "source": "string",
+          "thumbnail": {
+            "link": "string",
+            "serpapi_link": "string",
+            "height": 0,
+            "width": 0
+          },
+          "original_image": {
+            "link": "string",
+            "serpapi_link": "string",
+            "height": 0,
+            "width": 0
+          }
+        }
+      ],
+      "similiar_images": [
+        {
+          "image": {
+            "link": "string",
+            "serpapi_link": "string",
+            "height": 0,
+            "width": 0
+          },
+          "link": "string"
+        }
+      ]
+    },
+    "bing": {
+      "related_content": [
+        {
+          "position": 0,
+          "title": "string",
+          "link": "string",
+          "thumbnail": "string",
+          "date": "2025-10-27T13:49:12.195Z",
+          "source": "string",
+          "original": "string",
+          "cdn_original": "string",
+          "domain": "string",
+          "format": "string"
+        }
+      ],
+      "pages_with_this_image": [
+        "string"
+      ],
+      "looks_like": {
+        "title": "string",
+        "link": "string",
+        "thumbnail": "string",
+        "source": "string",
+        "description": "string",
+        "social_media_info": [
+          {
+            "url": "string",
+            "name": "string"
+          }
+        ],
+        "type": "string"
+      },
+      "related_searches": [
+        {
+          "name": "string",
+          "link": "string",
+          "thumbnail": "string",
+          "serpapi_link": "string"
+        }
+      ]
+    }
+  }
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+User
+
+
+POST
+/api/user
+Create User
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "apphud_id": "string"
+}
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "apphud_id": "string",
+  "tokens": 0
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+GET
+/api/user/me
+Get Me
+
+
+Parameters
+Try it out
+No parameters
+
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "apphud_id": "string",
+  "tokens": 0
+}
+No links
+
+POST
+/api/user/authorize
+Authorize User
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+}
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "access_token": "string",
+  "token_type": "bearer"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+Schemas
+Body_create_and_run_conversation_analyze_task_api_task_postCollapse allobject
+filesExpand all(array<string> | null)
+conversationExpand all(string | null)
+app_bundlestring
+webhook_urlExpand all(string | null)
+Body_create_and_run_place_search_task_api_task_place_postCollapse allobject
+filestringbinary
+conversationExpand all(string | null)
+app_bundlestring
+webhook_urlExpand all(string | null)
+Body_create_reverse_search_task_api_search_postCollapse allobject
+imagestringbinary
+BusterV2BingResultCollapse allobject
+related_contentExpand allarray<object>
+pages_with_this_imageExpand allarray<any>
+looks_likeExpand all(object | array<any>)
+related_searchesExpand allarray<object>
+BusterV2GetTaskResponseCollapse allobject
+statusExpand allobject
+resultsExpand allobject
+BusterV2GoogleResultCollapse allobject
+search_metadataExpand allobject
+search_parametersExpand allobject
+visual_matchesExpand allarray<object>
+BusterV2SetTaskResponseCollapse allobject
+task_idstringuuid
+BusterV2TaskStatusCollapse allstring
+EnumExpand allarray
+BusterV2YandexResultCollapse allobject
+knowledge_graphExpand allarray<object>
+image_tagsExpand allarray<object>
+image_resultsExpand allarray<object>
+similiar_imagesExpand all(array<object> | null)
+HTTPValidationErrorCollapse allobject
+detailExpand allarray<object>
+ImageCollapse allobject
+linkstring
+serpapi_linkstring
+heightinteger
+widthinteger
+ImageResultCollapse allobject
+titlestring
+snippetExpand all(string | null)
+linkstring
+sourcestring
+thumbnailExpand allobject
+original_imageExpand allobject
+ImageTagCollapse allobject
+textstring
+linkstring
+serpapi_linkstring
+KnowledgeCollapse allobject
+titlestring
+subtitlestring
+descriptionstring
+linkstring
+sourcestring
+thumbnailstring
+LooksLikeCollapse allobject
+titlestring
+linkstring
+thumbnailstring
+sourcestring
+descriptionstring
+social_media_infoExpand all(array<object> | null)
+typestring
+RelatedContentCollapse allobject
+positioninteger
+titlestring
+linkstring
+thumbnailstring
+datestringdate-time
+sourcestring
+originalstring
+cdn_originalstring
+domainstring
+formatstring
+RelatedSearchCollapse allobject
+namestring
+linkstring
+thumbnailstring
+serpapi_linkstring
+ResultsCollapse allobject
+googleExpand allobject
+yandexExpand allobject
+bingExpand allobject
+SearchMetadataCollapse allobject
+idstring
+statusstring
+json_endpointstring
+created_atstring
+processed_atstring
+google_lens_urlstring
+raw_html_filestring
+total_time_takennumber
+SearchParametersCollapse allobject
+enginestring
+urlstring
+SimiliarImageCollapse allobject
+imageExpand allobject
+linkstring
+SocialMediaInfoCollapse allobject
+urlstring
+namestring
+StatusCollapse allobject
+googleExpand allstring
+yandexExpand allstring
+bingExpand allstring
+TaskReadDTOCollapse allobject
+idstringuuid
+statusExpand allstring
+resultExpand all(object | string | null)
+errorExpand all(string | null)
+TaskResultCollapse allobject
+risk_scoreinteger
+red_flagsExpand allarray<string>
+recommendationsExpand allarray<string>
+TaskStatusCollapse allstring
+EnumExpand allarray
+TokenResponseDTOCollapse allobject
+access_tokenstring
+token_typeExpand allstring
+UserAuthorizeDTOCollapse allobject
+user_idstringuuid
+UserCreateDTOCollapse allobject
+apphud_idstring
+UserReadDTOCollapse allobject
+idstringuuid
+apphud_idstring
+tokensinteger
+ValidationErrorCollapse allobject
+locExpand allarray<(string | integer)>
+msgstring
+typestring
+VisualMatchCollapse allobject
+positioninteger
+titlestring
+linkstring
+sourcestring
+source_iconstring
+thumbnailstring
+thumbnail_widthinteger
+thumbnail_heightinteger
+imagestring
+image_widthinteger
+image_heightinteger
