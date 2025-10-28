@@ -5,7 +5,6 @@
 //  Created by Niiaz Khasanov on 10/27/25.
 //
 
-
 import SwiftUI
 
 public struct PrimaryButton: View {
@@ -33,30 +32,24 @@ public struct PrimaryButton: View {
         Button(action: action) {
             ZStack {
                 if isLoading {
-                    ProgressView()
-                        .tint(.white)
+                    ProgressView().tint(.white)
                 } else {
                     Text(title)
                         .font(Tokens.Font.subtitle)
                         .foregroundColor(.white)
+                        .lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, size == .large ? 16 : 12)
-            .background(isDisabled ? Tokens.Color.accentPressed : Tokens.Color.accent)
-            .cornerRadius(Tokens.Radius.pill)
+            // iOS-style corner smoothing (.continuous)
+            .background(
+                (isDisabled ? Tokens.Color.accentPressed : Tokens.Color.accent),
+                in: RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
+            )
         }
         .buttonStyle(.plain)
         .disabled(isDisabled || isLoading)
+        .accessibilityAddTraits(.isButton)
     }
-}
-
-#Preview {
-    VStack(spacing: 16) {
-        PrimaryButton("Find") {}
-        PrimaryButton("Find", isLoading: true) {}
-        PrimaryButton("Find", isDisabled: true) {}
-    }
-    .padding()
-    .background(Tokens.Color.backgroundMain)
 }

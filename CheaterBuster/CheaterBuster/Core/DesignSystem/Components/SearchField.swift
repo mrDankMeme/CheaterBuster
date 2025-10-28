@@ -5,7 +5,6 @@
 //  Created by Niiaz Khasanov on 10/27/25.
 //
 
-
 import SwiftUI
 
 public struct SearchField: View {
@@ -46,14 +45,17 @@ public struct SearchField: View {
                         Image(systemName: "xmark")
                             .foregroundColor(Tokens.Color.textSecondary)
                     }
+                    .accessibilityLabel("Clear text")
                 }
             }
             .padding(.horizontal, Tokens.Spacing.x16)
             .padding(.vertical, 12)
-            .background(Tokens.Color.surfaceCard)
-            .cornerRadius(Tokens.Radius.pill)
+            .background(
+                Tokens.Color.surfaceCard,
+                in: RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
+            )
             .overlay(
-                RoundedRectangle(cornerRadius: Tokens.Radius.pill)
+                RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
                     .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
             )
             .apply(Tokens.Shadow.card)
