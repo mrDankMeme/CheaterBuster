@@ -12,51 +12,70 @@ struct LoadingView: View {
     enum Mode { case name, face }
 
     let mode: Mode
+    let previewImage: UIImage?
     let cancelAction: (() -> Void)?
+
+    @State private var progress: CGFloat = 0.35 // моковый прогресс для визуала
 
     var body: some View {
         ZStack {
-            Tokens.Color.backgroundMain
-                .ignoresSafeArea()
+            Tokens.Color.backgroundMain.ignoresSafeArea()
 
             VStack(spacing: Tokens.Spacing.x24) {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: Tokens.Color.accent))
-                    .scaleEffect(1.6)
+                if mode == .face, let ui = previewImage {
+                    Image(uiImage: ui)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 260)
+                        .padding(.horizontal, Tokens.Spacing.x16)
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+                        )
 
-                VStack(spacing: Tokens.Spacing.x8) {
-                    Text(titleText)
-                        .font(Tokens.Font.title)
+                    Text("Photo analysis")
+                        .font(Tokens.Font.bodyMedium18)
                         .foregroundStyle(Tokens.Color.textPrimary)
-                    Text(subtitleText)
-                        .font(Tokens.Font.captionRegular)
-                        .foregroundStyle(Tokens.Color.textSecondary)
+
+                    // Простой прогресс (визуальный)
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Tokens.Color.borderNeutral.opacity(0.4)).frame(height: 8)
+                        Capsule().fill(Tokens.Color.accent).frame(width: progressWidth, height: 8)
+                    }
+                    .padding(.horizontal, Tokens.Spacing.x16)
+                } else {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: Tokens.Color.accent))
+                        .scaleEffect(1.6)
+
+                    Text("Searching...")
+                        .font(Tokens.Font.bodyMedium18)
+                        .foregroundStyle(Tokens.Color.textPrimary)
                 }
 
                 if let cancelAction {
-                    Button("Cancel") {
-                        cancelAction()
-                    }
-                    .font(Tokens.Font.bodyMedium18)
-                    .foregroundStyle(Tokens.Color.textSecondary)
-                    .padding(.top, Tokens.Spacing.x16)
+                    Button("Cancel") { cancelAction() }
+                        .font(Tokens.Font.caption)
+                        .foregroundStyle(Tokens.Color.textSecondary)
+                        .padding(.top, Tokens.Spacing.x8)
                 }
+
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, Tokens.Spacing.x32)
+            .padding(.top, Tokens.Spacing.x24)
+        }
+        .onAppear {
+            // лёгкая псевдо-анимация прогресса
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                progress = 0.7
+            }
         }
     }
 
-    private var titleText: String {
-        switch mode {
-        case .name: return "Searching..."
-        case .face: return "Analyzing photo..."
-        }
-    }
-
-    private var subtitleText: String {
-        switch mode {
-        case .name: return "Looking for matches across sources"
-        case .face: return "Comparing with open profiles"
-        }
+    private var progressWidth: CGFloat {
+        // просто визуально — 35..70% ширины экрана
+        UIScreen.main.bounds.width * progress
     }
 }

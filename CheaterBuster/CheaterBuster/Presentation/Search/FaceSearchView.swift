@@ -11,108 +11,165 @@ import UIKit
 
 struct FaceSearchView: View {
     @ObservedObject var vm: SearchViewModel
+    @Environment(\.dismiss) private var dismiss
 
     @State private var item: PhotosPickerItem?
     @State private var image: UIImage?
+
     @State private var goResults = false
     @State private var didAnalyze = false
 
     var body: some View {
-        VStack(spacing: Tokens.Spacing.x16) {
+        ZStack {
+            Tokens.Color.backgroundMain.ignoresSafeArea()
 
-            // 🖼 Превью или заглушка
-            Group {
-                if let img = image {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFit()
-                        .cornerRadiusContinuous(Tokens.Radius.medium)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
-                                .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+            VStack(spacing: Tokens.Spacing.x16) {
+                // Header
+                HStack {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "arrow.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Tokens.Color.textPrimary)
+                            .padding(12)
+                            .background(
+                                Tokens.Color.surfaceCard,
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            )
+                            .apply(Tokens.Shadow.card)
+                    }
+
+                    Spacer()
+
+                    Text("Face search")
+                        .font(Tokens.Font.title)
+                        .foregroundStyle(Tokens.Color.textPrimary)
+
+                    Spacer().frame(width: 44)
+                }
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.top, Tokens.Spacing.x16)
+
+                // Preview
+                Group {
+                    if let img = image {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, Tokens.Spacing.x16)
+                            .padding(.top, Tokens.Spacing.x12)
+                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+                            )
+                    } else {
+                        ContentUnavailableView(
+                            "Select a photo",
+                            systemImage: "photo",
+                            description: Text("Pick one image to search by face.")
                         )
-                        .frame(maxHeight: 320)
-                } else {
-                    ContentUnavailableView(
-                        "Select a photo",
-                        systemImage: "photo",
-                        description: Text("Pick one image to search by face.")
-                    )
-                    .frame(maxHeight: 320)
+                        .padding(.horizontal, Tokens.Spacing.x16)
+                        .padding(.top, Tokens.Spacing.x32)
+                    }
                 }
-            }
 
-            // 🗂 PhotosPicker (свой вид кнопки)
-            PhotosPicker(selection: $item, matching: .images, photoLibrary: .shared()) {
-                Text("Choose from Library")
-                    .font(Tokens.Font.subtitle)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        Tokens.Color.accent,
-                        in: RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
-                    )
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
-            .onChange(of: item) { _, newValue in
-                Task { @MainActor in
-                    guard let data = try? await newValue?.loadTransferable(type: Data.self),
-                          let img = UIImage(data: data) else { return }
-                    image = img
-                }
-            }
-
-            // ⚙️ Кнопка анализа
-            PrimaryButton(
-                "Analyze",
-                isLoading: vm.isLoading,
-                isDisabled: image == nil || vm.isLoading
-            ) {
-                guard let img = image,
-                      let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
-                didAnalyze = true
-                vm.runImageSearch(jpegData: jpeg)
-            }
-
-            // ❗ Ошибка, если есть
-            if let err = vm.errorText {
-                Text(err)
-                    .foregroundStyle(.red)
-                    .font(Tokens.Font.captionRegular)
-            }
-
-            Spacer()
         }
-        .padding(.horizontal, Tokens.Spacing.x16)
-        .padding(.top, Tokens.Spacing.x24)
-        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
-        .navigationTitle("Face search")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
 
-        // 👇 Навигация к результатам по окончанию загрузки
+        // Bottom tools panel (как на макете)
+        .safeAreaInset(edge: .bottom) {
+            HStack(spacing: Tokens.Spacing.x16) {
+                CircleTool(system: "rotate.left")  { /* позже */ }
+                CircleTool(system: "rotate.right") { /* позже */ }
+                CircleTool(system: "crop")         { /* позже */ }
+
+                Spacer()
+
+                // Pink CTA →
+                Button {
+                    guard let img = image,
+                          let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
+                    didAnalyze = true
+                    vm.runImageSearch(jpegData: jpeg)
+                } label: {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 52, height: 52)
+                        .background(
+                            Tokens.Color.accent,
+                            in: Circle()
+                        )
+                        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                }
+                .buttonStyle(.plain)
+                .disabled(image == nil || vm.isLoading)
+            }
+            .padding(.horizontal, Tokens.Spacing.x20)
+            .padding(.vertical, Tokens.Spacing.x16)
+            .background(
+                Tokens.Color.surfaceCard,
+                ignoresSafeAreaEdges: .bottom
+            )
+        }
+
+        // PhotosPicker (кнопка из верхней зоны не нужна – откроем по тапу на превью-заглушку)
+        .photosPicker(isPresented: Binding(
+            get: { image == nil && item == nil }, set: { _ in }
+        ), selection: $item, matching: .images)
+
+        .onChange(of: item) { _, newValue in
+            Task { @MainActor in
+                guard let data = try? await newValue?.loadTransferable(type: Data.self),
+                      let img = UIImage(data: data) else { return }
+                image = img
+            }
+        }
+
+        // Навигация к результатам
         .onChange(of: vm.isLoading) { was, isNow in
             if didAnalyze && was == true && isNow == false {
                 didAnalyze = false
                 goResults = true
             }
         }
-
-        // переход на экран результатов
         .navigationDestination(isPresented: $goResults) {
-            SearchResultsView(results: vm.results)
+            SearchResultsView(results: vm.results, mode: .face)
         }
+
+        // Loading over fullscreen (с превью и прогрессом)
         .fullScreenCover(
             isPresented: Binding(
-                get: { vm.isLoading },
-                set: { _ in /* игнорируем внешние изменения */ }
+                get: { vm.isBlockingLoading },
+                set: { _ in }
             )
         ) {
-            LoadingView(mode: .face, cancelAction: {
-                // vm.cancelImageSearch()
-            })
-            .interactiveDismissDisabled(true)
+            LoadingView(mode: .face, previewImage: image, cancelAction: nil)
+                .interactiveDismissDisabled(true)
         }
+    }
+}
 
+private struct CircleTool: View {
+    let system: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Tokens.Color.textPrimary)
+                .frame(width: 48, height: 48)
+                .background(
+                    Tokens.Color.backgroundMain,
+                    in: Circle()
+                )
+                .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
     }
 }
