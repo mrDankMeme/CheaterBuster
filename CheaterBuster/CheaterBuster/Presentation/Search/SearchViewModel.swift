@@ -51,21 +51,23 @@ final class SearchViewModel: ObservableObject {
             .assign(to: &$results)
     }
 
-    // Явный запуск по кнопке «Find»
     func runNameSearch() {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
+
         isLoading = true
         errorText = nil
+
         search.searchByName(q)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] completion in
                 self?.isLoading = false
                 if case .failure(let err) = completion {
                     self?.errorText = err.localizedDescription
+                    self?.results = []
                 }
             } receiveValue: { [weak self] hits in
-                self?.results = hits
+                self?.results = hits     
             }
             .store(in: &bag)
     }
@@ -74,5 +76,24 @@ final class SearchViewModel: ObservableObject {
         if settings.isHistoryEnabled {
             history.add(query)
         }
+    }
+}
+
+extension SearchViewModel {
+    func runImageSearch(jpegData: Data) {
+        isLoading = true
+        errorText = nil
+        search.searchByImage(jpegData)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] completion in
+                self?.isLoading = false
+                if case .failure(let err) = completion {
+                    self?.errorText = err.localizedDescription
+                    self?.results = []
+                }
+            } receiveValue: { [weak self] hits in
+                self?.results = hits
+            }
+            .store(in: &bag)
     }
 }

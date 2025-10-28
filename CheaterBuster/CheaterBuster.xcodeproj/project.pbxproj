@@ -40,6 +40,7 @@
 		A35FF3A02EB108940000E890 /* NameSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF39F2EB108940000E890 /* NameSearchView.swift */; };
 		A35FF3A22EB108C20000E890 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3A12EB108C20000E890 /* SearchResultsView.swift */; };
 		A35FF3A42EB10B2C0000E890 /* Corner+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3A32EB10B200000E890 /* Corner+Helpers.swift */; };
+		A35FF3A62EB10FCD0000E890 /* FaceSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3A52EB10FCD0000E890 /* FaceSearchView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -76,6 +77,7 @@
 		A35FF39F2EB108940000E890 /* NameSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NameSearchView.swift; sourceTree = "<group>"; };
 		A35FF3A12EB108C20000E890 /* SearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsView.swift; sourceTree = "<group>"; };
 		A35FF3A32EB10B200000E890 /* Corner+Helpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Corner+Helpers.swift"; sourceTree = "<group>"; };
+		A35FF3A52EB10FCD0000E890 /* FaceSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceSearchView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -192,6 +194,7 @@
 		A35FF35F2EB0CE280000E890 /* Search */ = {
 			isa = PBXGroup;
 			children = (
+				A35FF3A52EB10FCD0000E890 /* FaceSearchView.swift */,
 				A35FF3A12EB108C20000E890 /* SearchResultsView.swift */,
 				A35FF39F2EB108940000E890 /* NameSearchView.swift */,
 				A35FF3992EB1049F0000E890 /* SearchScreen.swift */,
@@ -356,6 +359,7 @@
 				A35FF3922EB0FC040000E890 /* HistoryViewModel.swift in Sources */,
 				A35FF3732EB0D3460000E890 /* SettingsViewModel.swift in Sources */,
 				A35FF3982EB1047A0000E890 /* RootTabView.swift in Sources */,
+				A35FF3A62EB10FCD0000E890 /* FaceSearchView.swift in Sources */,
 				A35FF3752EB0D8350000E890 /* AppAssembler.swift in Sources */,
 				A35FF3822EB0E9350000E890 /* HistoryStore.swift in Sources */,
 				A35FF3962EB0FEBB0000E890 /* ViewModelsAssembly.swift in Sources */,

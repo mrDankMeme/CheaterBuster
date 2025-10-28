@@ -9,7 +9,7 @@ import Foundation
 import Combine
 
 final class SearchServiceImpl: SearchService {
-    func searchByName(_ query: String) -> AnyPublisher<[ImageHit], any Error> {
+    func searchByName(_ query: String) -> AnyPublisher<[ImageHit],Error> {
         Just(query)
             .delay(for: .milliseconds(300), scheduler: DispatchQueue.main)
             .map { q in
@@ -27,7 +27,7 @@ final class SearchServiceImpl: SearchService {
             .eraseToAnyPublisher()
     }
     
-    func searchByImage(_ jpegData: Data) -> AnyPublisher<[ImageHit], any Error> {
+    func searchByImage(_ jpegData: Data) -> AnyPublisher<[ImageHit],Error> {
         Just((0..<3).map { i in
                   ImageHit(
                       title: "Similar \(i+1)",
