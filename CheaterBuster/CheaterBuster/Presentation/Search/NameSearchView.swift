@@ -2,16 +2,11 @@
 //  NameSearchView.swift
 //  CheaterBuster
 //
-//  Created by Niiaz Khasanov on 10/27/25.
-//
-//
-
 
 import SwiftUI
 
 struct NameSearchView: View {
     @ObservedObject var vm: SearchViewModel
-
     @Environment(\.dismiss) private var dismiss
 
     @State private var goResults = false
@@ -44,7 +39,7 @@ struct NameSearchView: View {
                         .font(Tokens.Font.title)
                         .foregroundStyle(Tokens.Color.textPrimary)
 
-                    Spacer().frame(width: 44) // симметрия под кнопку back
+                    Spacer().frame(width: 44) // симметрия
                 }
                 .padding(.horizontal, Tokens.Spacing.x16)
                 .padding(.top, Tokens.Spacing.x16)
@@ -61,7 +56,7 @@ struct NameSearchView: View {
         .navigationBarBackButtonHidden(true)
         .navigationBarTitleDisplayMode(.inline)
 
-        // Bottom CTA (как в макете)
+        // Нижняя большая кнопка Find
         .safeAreaInset(edge: .bottom) {
             HStack {
                 PrimaryButton(
@@ -70,7 +65,6 @@ struct NameSearchView: View {
                     isDisabled: vm.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || vm.isLoading
                 ) {
                     didSubmit = true
-                    vm.onSubmit()
                     vm.runNameSearch()
                 }
             }
@@ -82,7 +76,7 @@ struct NameSearchView: View {
             )
         }
 
-        // Навигация к результатам после завершения
+        // Когда блокирующая загрузка завершилась после нажатия — переходим к результатам
         .onChange(of: vm.isLoading) { was, isNow in
             if didSubmit && was == true && isNow == false {
                 didSubmit = false
@@ -93,7 +87,7 @@ struct NameSearchView: View {
             SearchResultsView(results: vm.results, mode: .name)
         }
 
-        // Full-screen загрузка только по кнопке (см. vm.isBlockingLoading)
+        // Фуллскрин загрузка (computed Binding — без попытки записывать обратно)
         .fullScreenCover(
             isPresented: Binding(
                 get: { vm.isBlockingLoading },

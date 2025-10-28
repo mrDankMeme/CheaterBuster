@@ -21,6 +21,8 @@ final class ServicesAssembly: Assembly {
             HistoryStoreImpl()
         }.inObjectScope(.container)
         
+        container.register(CheaterStore.self) { _ in CheaterStoreImpl() }
+        
         container.register(SettingsStore.self) { _ in SettingsStoreImpl() }
                    .inObjectScope(.container)
     }

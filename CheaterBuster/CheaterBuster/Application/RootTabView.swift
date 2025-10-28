@@ -21,8 +21,7 @@ struct RootTabView: View {
             CheaterScreen()  // временно без VM
                 .tabItem { Label("Cheater", systemImage: "person.crop.circle.badge.exclamationmark") }
 
-            HistoryScreen()
-                .tabItem { Label("History", systemImage: "clock") }
+            HistoryView(vm: resolver.resolve(HistoryViewModel.self)!)
 
             SettingsScreen()
                 .tabItem { Label("Settings", systemImage: "gearshape") }

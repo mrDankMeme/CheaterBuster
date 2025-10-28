@@ -17,9 +17,15 @@ final class ViewModelsAssembly: Assembly {
         container.register(CheaterViewModel.self) { r in
             CheaterViewModel(analyzer: r.resolve(CheaterAnalyzerService.self)!)
         }
+      
         container.register(HistoryViewModel.self) { r in
-            HistoryViewModel(store: r.resolve(HistoryStore.self)!)
+            HistoryViewModel(
+                store: r.resolve(HistoryStore.self)!,
+                cheaterStore: r.resolve(CheaterStore.self)!,
+                search: r.resolve(SearchService.self)!
+            )
         }
+        
         container.register(SettingsViewModel.self) { r in
             SettingsViewModel(store: r.resolve(SettingsStore.self)!)
         }

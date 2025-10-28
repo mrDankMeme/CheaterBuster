@@ -4,38 +4,47 @@
 //
 
 import Foundation
-import Combine
+import UIKit
 
-/// MRU-хранилище последних запросов (в памяти).
 final class HistoryStoreImpl: HistoryStore {
-    private let maxItems: Int
-    private let subject: CurrentValueSubject<[String], Never> = .init([])
+    private let key = "cb.history.v1"
+    private let limit = 10
+    private let defaults: UserDefaults
 
-    init(maxItems: Int = 10) {
-        self.maxItems = maxItems
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
     }
 
-    var itemsPublisher: AnyPublisher<[String], Never> {
-        subject.eraseToAnyPublisher()
+    func load() -> [HistoryRecord] {
+        guard let data = defaults.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([HistoryRecord].self, from: data)) ?? []
     }
 
-    func add(_ item: String) {
-        var arr = subject.value
-        let trimmed = item.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+    func add(_ record: HistoryRecord) {
+        var arr = load()
 
-        // Удаляем существующий (если был), вставляем в начало.
-        arr.removeAll { $0 == trimmed }
-        arr.insert(trimmed, at: 0)
-
-        // Усекаем хвост, если превысили лимит.
-        if arr.count > maxItems {
-            arr = Array(arr.prefix(maxItems))
+        // глобальная де-дупликация:
+        if let q = record.query {
+            arr.removeAll { $0.kind == .name && $0.query == q }
+        } else if let data = record.imageJPEG {
+            let h = data.hashValue
+            arr.removeAll { $0.kind == .face && ($0.imageJPEG?.hashValue == h) }
         }
-        subject.send(arr)
+
+        arr.insert(record, at: 0)
+        if arr.count > limit {
+            arr = Array(arr.prefix(limit))
+        }
+        save(arr)
     }
 
-    func get() -> [String] { subject.value }
+    func clearAll() {
+        defaults.removeObject(forKey: key)
+    }
 
-    func clear() { subject.send([]) }
+    private func save(_ arr: [HistoryRecord]) {
+        if let data = try? JSONEncoder().encode(arr) {
+            defaults.set(data, forKey: key)
+        }
+    }
 }

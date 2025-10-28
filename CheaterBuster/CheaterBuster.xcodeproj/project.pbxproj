@@ -36,12 +36,17 @@
 		A35FF3982EB1047A0000E890 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3972EB104760000E890 /* RootTabView.swift */; };
 		A35FF39A2EB104A30000E890 /* SearchScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3992EB1049F0000E890 /* SearchScreen.swift */; };
 		A35FF39C2EB106150000E890 /* CheaterScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF39B2EB1060F0000E890 /* CheaterScreen.swift */; };
-		A35FF39E2EB107420000E890 /* HistoryScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF39D2EB1073A0000E890 /* HistoryScreen.swift */; };
+		A35FF39E2EB107420000E890 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF39D2EB1073A0000E890 /* HistoryView.swift */; };
 		A35FF3A02EB108940000E890 /* NameSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF39F2EB108940000E890 /* NameSearchView.swift */; };
 		A35FF3A22EB108C20000E890 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3A12EB108C20000E890 /* SearchResultsView.swift */; };
 		A35FF3A42EB10B2C0000E890 /* Corner+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3A32EB10B200000E890 /* Corner+Helpers.swift */; };
 		A35FF3A62EB10FCD0000E890 /* FaceSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3A52EB10FCD0000E890 /* FaceSearchView.swift */; };
 		A35FF3A92EB11AC50000E890 /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3A82EB11AC50000E890 /* LoadingView.swift */; };
+		A35FF3AB2EB1274F0000E890 /* HistoryKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3AA2EB1274F0000E890 /* HistoryKind.swift */; };
+		A35FF3AD2EB12D790000E890 /* CheaterRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3AC2EB12D790000E890 /* CheaterRecord.swift */; };
+		A35FF3AF2EB12D9C0000E890 /* CheaterStoreImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3AE2EB12D9C0000E890 /* CheaterStoreImpl.swift */; };
+		A35FF3B12EB12DBE0000E890 /* CheaterStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3B02EB12DBE0000E890 /* CheaterStore.swift */; };
+		A35FF3B32EB12F980000E890 /* DevSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3B22EB12F980000E890 /* DevSeed.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -74,12 +79,17 @@
 		A35FF3972EB104760000E890 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		A35FF3992EB1049F0000E890 /* SearchScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchScreen.swift; sourceTree = "<group>"; };
 		A35FF39B2EB1060F0000E890 /* CheaterScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheaterScreen.swift; sourceTree = "<group>"; };
-		A35FF39D2EB1073A0000E890 /* HistoryScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryScreen.swift; sourceTree = "<group>"; };
+		A35FF39D2EB1073A0000E890 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		A35FF39F2EB108940000E890 /* NameSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NameSearchView.swift; sourceTree = "<group>"; };
 		A35FF3A12EB108C20000E890 /* SearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsView.swift; sourceTree = "<group>"; };
 		A35FF3A32EB10B200000E890 /* Corner+Helpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Corner+Helpers.swift"; sourceTree = "<group>"; };
 		A35FF3A52EB10FCD0000E890 /* FaceSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceSearchView.swift; sourceTree = "<group>"; };
 		A35FF3A82EB11AC50000E890 /* LoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingView.swift; sourceTree = "<group>"; };
+		A35FF3AA2EB1274F0000E890 /* HistoryKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryKind.swift; sourceTree = "<group>"; };
+		A35FF3AC2EB12D790000E890 /* CheaterRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheaterRecord.swift; sourceTree = "<group>"; };
+		A35FF3AE2EB12D9C0000E890 /* CheaterStoreImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheaterStoreImpl.swift; sourceTree = "<group>"; };
+		A35FF3B02EB12DBE0000E890 /* CheaterStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheaterStore.swift; sourceTree = "<group>"; };
+		A35FF3B22EB12F980000E890 /* DevSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevSeed.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -155,10 +165,11 @@
 		A35FF35A2EB0CDF10000E890 /* Application */ = {
 			isa = PBXGroup;
 			children = (
+				A35FF3B22EB12F980000E890 /* DevSeed.swift */,
+				A35FF34C2EB005DD0000E890 /* CheaterBusterApp.swift */,
 				A35FF3972EB104760000E890 /* RootTabView.swift */,
 				A35FF3952EB0FEB50000E890 /* ViewModelsAssembly.swift */,
 				A35FF3932EB0FCED0000E890 /* ServicesAssembly.swift */,
-				A35FF34C2EB005DD0000E890 /* CheaterBusterApp.swift */,
 				A35FF3742EB0D8300000E890 /* AppAssembler.swift */,
 			);
 			path = Application;
@@ -218,7 +229,7 @@
 		A35FF3612EB0CE3E0000E890 /* History */ = {
 			isa = PBXGroup;
 			children = (
-				A35FF39D2EB1073A0000E890 /* HistoryScreen.swift */,
+				A35FF39D2EB1073A0000E890 /* HistoryView.swift */,
 				A35FF3912EB0FBFE0000E890 /* HistoryViewModel.swift */,
 			);
 			path = History;
@@ -236,6 +247,8 @@
 		A35FF3632EB0CE570000E890 /* Entities */ = {
 			isa = PBXGroup;
 			children = (
+				A35FF3AC2EB12D790000E890 /* CheaterRecord.swift */,
+				A35FF3AA2EB1274F0000E890 /* HistoryKind.swift */,
 				A35FF3792EB0E68B0000E890 /* ImageHit.swift */,
 				A35FF37B2EB0E7500000E890 /* ConversationAnalysis.swift */,
 			);
@@ -245,6 +258,7 @@
 		A35FF3642EB0CE5E0000E890 /* UseCases */ = {
 			isa = PBXGroup;
 			children = (
+				A35FF3B02EB12DBE0000E890 /* CheaterStore.swift */,
 				A35FF37D2EB0E8040000E890 /* SearchService.swift */,
 				A35FF37F2EB0E8D20000E890 /* CheaterAnalyzerService.swift */,
 				A35FF3812EB0E9310000E890 /* HistoryStore.swift */,
@@ -263,6 +277,7 @@
 		A35FF3662EB0CE710000E890 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				A35FF3AE2EB12D9C0000E890 /* CheaterStoreImpl.swift */,
 				A35FF38B2EB0F0F70000E890 /* SettingsStoreImpl.swift */,
 				A35FF3892EB0EE2F0000E890 /* HistoryStoreImpl.swift */,
 				A35FF3872EB0ED360000E890 /* CheaterAnalyzerServiceImpl.swift */,
@@ -366,8 +381,10 @@
 				A35FF3592EB00CF10000E890 /* SearchField.swift in Sources */,
 				A35FF37A2EB0E6910000E890 /* ImageHit.swift in Sources */,
 				A35FF3A42EB10B2C0000E890 /* Corner+Helpers.swift in Sources */,
+				A35FF3B12EB12DBE0000E890 /* CheaterStore.swift in Sources */,
 				A35FF3902EB0F42E0000E890 /* CheaterViewModel.swift in Sources */,
 				A35FF3922EB0FC040000E890 /* HistoryViewModel.swift in Sources */,
+				A35FF3AD2EB12D790000E890 /* CheaterRecord.swift in Sources */,
 				A35FF3732EB0D3460000E890 /* SettingsViewModel.swift in Sources */,
 				A35FF3A92EB11AC50000E890 /* LoadingView.swift in Sources */,
 				A35FF3982EB1047A0000E890 /* RootTabView.swift in Sources */,
@@ -380,11 +397,14 @@
 				A35FF39A2EB104A30000E890 /* SearchScreen.swift in Sources */,
 				A35FF3802EB0E8DE0000E890 /* CheaterAnalyzerService.swift in Sources */,
 				A35FF3572EB00CE80000E890 /* PrimaryButton.swift in Sources */,
-				A35FF39E2EB107420000E890 /* HistoryScreen.swift in Sources */,
+				A35FF39E2EB107420000E890 /* HistoryView.swift in Sources */,
 				A35FF39C2EB106150000E890 /* CheaterScreen.swift in Sources */,
 				A35FF3512EB005DD0000E890 /* DemoView.swift in Sources */,
+				A35FF3AB2EB1274F0000E890 /* HistoryKind.swift in Sources */,
+				A35FF3AF2EB12D9C0000E890 /* CheaterStoreImpl.swift in Sources */,
 				A35FF37E2EB0E80C0000E890 /* SearchService.swift in Sources */,
 				A35FF38A2EB0EE380000E890 /* HistoryStoreImpl.swift in Sources */,
+				A35FF3B32EB12F980000E890 /* DevSeed.swift in Sources */,
 				A35FF3862EB0EA600000E890 /* SearchServiceImpl.swift in Sources */,
 				A35FF37C2EB0E7600000E890 /* ConversationAnalysis.swift in Sources */,
 				A35FF3782EB0D8B70000E890 /* Environment+Resolver.swift in Sources */,

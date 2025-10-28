@@ -291,6 +291,30 @@ extension EnvironmentValues {
     }
 }
 //
+//  DevSeed.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import Foundation
+import Swinject
+
+enum DevSeed {
+    static func run(_ resolver: Resolver) {
+        #if DEBUG
+        guard let store = resolver.resolve(CheaterStore.self) else { return }
+
+        // Чтобы не дублировать при каждом запуске — только если история пустая
+        if store.load().isEmpty {
+            store.add(.init(kind: .image, riskScore: 80, note: "WhatsApp screenshot"))
+            store.add(.init(kind: .file,  riskScore: 92, note: "PDF contract"))
+        }
+        #endif
+    }
+}
+//
 //  AppAssembler.swift
 //  CheaterBuster
 //
@@ -330,6 +354,8 @@ final class ServicesAssembly: Assembly {
             HistoryStoreImpl()
         }.inObjectScope(.container)
         
+        container.register(CheaterStore.self) { _ in CheaterStoreImpl() }
+        
         container.register(SettingsStore.self) { _ in SettingsStoreImpl() }
                    .inObjectScope(.container)
     }
@@ -347,12 +373,17 @@ import Swinject
 @main
 struct CheaterBusterApp: App {
     
-    private let assembler = AppAssembler.make()
-    
+    private let assembler = AppAssembler.make() 
+    private var resolver: Resolver { assembler.resolver }
+
     var body: some Scene {
         WindowGroup {
             RootTabView()
-                .environment(\.resolver, assembler.resolver)
+                .environment(\.resolver, resolver)
+
+                .task {
+                    DevSeed.run(resolver)
+                }
         }
     }
 }
@@ -379,8 +410,7 @@ struct RootTabView: View {
             CheaterScreen()  // временно без VM
                 .tabItem { Label("Cheater", systemImage: "person.crop.circle.badge.exclamationmark") }
 
-            HistoryScreen()
-                .tabItem { Label("History", systemImage: "clock") }
+            HistoryView(vm: resolver.resolve(HistoryViewModel.self)!)
 
             SettingsScreen()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
@@ -406,9 +436,15 @@ final class ViewModelsAssembly: Assembly {
         container.register(CheaterViewModel.self) { r in
             CheaterViewModel(analyzer: r.resolve(CheaterAnalyzerService.self)!)
         }
+      
         container.register(HistoryViewModel.self) { r in
-            HistoryViewModel(store: r.resolve(HistoryStore.self)!)
+            HistoryViewModel(
+                store: r.resolve(HistoryStore.self)!,
+                cheaterStore: r.resolve(CheaterStore.self)!,
+                search: r.resolve(SearchService.self)!
+            )
         }
+        
         container.register(SettingsViewModel.self) { r in
             SettingsViewModel(store: r.resolve(SettingsStore.self)!)
         }
@@ -445,40 +481,49 @@ final class SettingsStoreImpl: SettingsStore {
 //
 
 import Foundation
-import Combine
+import UIKit
 
-/// MRU-хранилище последних запросов (в памяти).
 final class HistoryStoreImpl: HistoryStore {
-    private let maxItems: Int
-    private let subject: CurrentValueSubject<[String], Never> = .init([])
+    private let key = "cb.history.v1"
+    private let limit = 10
+    private let defaults: UserDefaults
 
-    init(maxItems: Int = 10) {
-        self.maxItems = maxItems
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
     }
 
-    var itemsPublisher: AnyPublisher<[String], Never> {
-        subject.eraseToAnyPublisher()
+    func load() -> [HistoryRecord] {
+        guard let data = defaults.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([HistoryRecord].self, from: data)) ?? []
     }
 
-    func add(_ item: String) {
-        var arr = subject.value
-        let trimmed = item.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+    func add(_ record: HistoryRecord) {
+        var arr = load()
 
-        // Удаляем существующий (если был), вставляем в начало.
-        arr.removeAll { $0 == trimmed }
-        arr.insert(trimmed, at: 0)
-
-        // Усекаем хвост, если превысили лимит.
-        if arr.count > maxItems {
-            arr = Array(arr.prefix(maxItems))
+        // глобальная де-дупликация:
+        if let q = record.query {
+            arr.removeAll { $0.kind == .name && $0.query == q }
+        } else if let data = record.imageJPEG {
+            let h = data.hashValue
+            arr.removeAll { $0.kind == .face && ($0.imageJPEG?.hashValue == h) }
         }
-        subject.send(arr)
+
+        arr.insert(record, at: 0)
+        if arr.count > limit {
+            arr = Array(arr.prefix(limit))
+        }
+        save(arr)
     }
 
-    func get() -> [String] { subject.value }
+    func clearAll() {
+        defaults.removeObject(forKey: key)
+    }
 
-    func clear() { subject.send([]) }
+    private func save(_ arr: [HistoryRecord]) {
+        if let data = try? JSONEncoder().encode(arr) {
+            defaults.set(data, forKey: key)
+        }
+    }
 }
 //
 //  CheaterAnalyzerServiceImpl.swift
@@ -551,6 +596,53 @@ final class SearchServiceImpl: SearchService {
     
 }
 //
+//  CheaterStore.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import Foundation
+
+
+final class CheaterStoreImpl: CheaterStore {
+    private let key = "cb.cheater.history.v1"
+    private let limit = 10
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func load() -> [CheaterRecord] {
+        guard let data = defaults.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([CheaterRecord].self, from: data)) ?? []
+    }
+
+    func add(_ record: CheaterRecord) {
+        var arr = load()
+        // простая де-дупликация по (kind,risk,previewHash)
+        if let d = record.previewJPEG {
+            let h = d.hashValue
+            arr.removeAll { $0.kind == record.kind && $0.riskScore == record.riskScore && ($0.previewJPEG?.hashValue == h) }
+        }
+        arr.insert(record, at: 0)
+        if arr.count > limit { arr = Array(arr.prefix(limit)) }
+        save(arr)
+    }
+
+    func clearAll() {
+        defaults.removeObject(forKey: key)
+    }
+
+    private func save(_ arr: [CheaterRecord]) {
+        if let data = try? JSONEncoder().encode(arr) {
+            defaults.set(data, forKey: key)
+        }
+    }
+}
+//
 //  CheaterAnalyzerService.swift
 //  CheaterBuster
 //
@@ -564,6 +656,22 @@ public protocol CheaterAnalyzerService {
     func analyze(text: String) -> AnyPublisher<ConversationAnalysis,Error>
 }
  
+//
+//  CheaterStore.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+
+import Foundation
+
+public protocol CheaterStore {
+    func load() -> [CheaterRecord]
+    func add(_ record: CheaterRecord)
+    func clearAll()
+}
 //
 //  SearchService.swift
 //  CheaterBuster
@@ -589,10 +697,9 @@ import Foundation
 import Combine
 
 public protocol HistoryStore {
-    var itemsPublisher: AnyPublisher<[String],Never> { get }
-    func add (_ item:String)
-    func get() -> [String]
-    func clear()
+    func load() -> [HistoryRecord]
+    func add(_ record: HistoryRecord)
+    func clearAll()
 }
 //
 //  SettingsStore.swift
@@ -605,6 +712,53 @@ import Foundation
 
 public protocol SettingsStore {
     var isHistoryEnabled: Bool { get set }
+}
+//
+//  HistoryKind.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import Foundation
+import UIKit
+
+public enum HistoryKind: String, Codable {
+    case name   // поиск по имени
+    case face   // поиск по фото
+}
+
+public struct HistoryRecord: Identifiable, Codable {
+    public let id: UUID
+    public let createdAt: Date
+    public let kind: HistoryKind
+
+    // name-search
+    public let query: String?
+
+    // face-search (мини-превью jpeg)
+    public let imageJPEG: Data?
+
+    // опциональные подписи для превью
+    public let titlePreview: String?
+    public let sourcePreview: String?
+
+    public init(id: UUID = UUID(),
+                createdAt: Date = .init(),
+                kind: HistoryKind,
+                query: String? = nil,
+                imageJPEG: Data? = nil,
+                titlePreview: String? = nil,
+                sourcePreview: String? = nil) {
+        self.id = id
+        self.createdAt = createdAt
+        self.kind = kind
+        self.query = query
+        self.imageJPEG = imageJPEG
+        self.titlePreview = titlePreview
+        self.sourcePreview = sourcePreview
+    }
 }
 //
 //  ConversationAnalysis.swift
@@ -647,6 +801,47 @@ public struct ImageHit: Identifiable, Hashable {
         self.source = source
         self.thumbnailURL = thumbnailURL
         self.linkURL = linkURL
+    }
+}
+//
+//  CheaterRecord.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+
+import Foundation
+import UIKit
+
+public enum CheaterSourceKind: String, Codable {
+    case image   // анализ скриншота/фото
+    case file    // анализ документа/файла
+}
+
+public struct CheaterRecord: Identifiable, Codable {
+    public let id: UUID
+    public let createdAt: Date
+    public let kind: CheaterSourceKind
+    public let riskScore: Int            // 0...100
+    public let previewJPEG: Data?        // маленькая превьюшка (опц.)
+
+    // опционально — краткий заголовок/примечание
+    public let note: String?
+
+    public init(id: UUID = UUID(),
+                createdAt: Date = .init(),
+                kind: CheaterSourceKind,
+                riskScore: Int,
+                previewJPEG: Data? = nil,
+                note: String? = nil) {
+        self.id = id
+        self.createdAt = createdAt
+        self.kind = kind
+        self.riskScore = max(0, min(100, riskScore))
+        self.previewJPEG = previewJPEG
+        self.note = note
     }
 }
 //
@@ -697,32 +892,46 @@ final class SettingsViewModel: ObservableObject {
 //  Created by Niiaz Khasanov on 10/28/25.
 //
 
+//
+//  SearchViewModel.swift
+//  CheaterBuster
+//
+
 import Foundation
 import Combine
+import UIKit
 
 final class SearchViewModel: ObservableObject {
-    // Input
+
+    // MARK: - Input
     @Published var query: String = ""
-    
-    // Output
+
+    // MARK: - Output
     @Published private(set) var results: [ImageHit] = []
-    @Published private(set) var isLoading: Bool = false
-    @Published private(set) var isBlockingLoading: Bool = false
+    @Published private(set) var isLoading: Bool = false            // мелкие индикаторы (в кнопках)
+    @Published private(set) var isBlockingLoading: Bool = false     // full-screen загрузка
     @Published private(set) var errorText: String?
-    
+
+    // MARK: - Deps
     private let search: SearchService
     private let history: HistoryStore
-    private let settings: SettingsStore
+    // settings можно использовать позже (флаги, лимиты, т.п.)
+    private let settings: SettingsStore?
+
     private var bag = Set<AnyCancellable>()
-    
-    init(search: SearchService, history: HistoryStore, settings: SettingsStore) {
+
+    // MARK: - Init
+    init(search: SearchService,
+         history: HistoryStore,
+         settings: SettingsStore? = nil)
+    {
         self.search = search
         self.history = history
         self.settings = settings
         bindQueryDebounce()
     }
-    
-    // 1) Debounce-поиск по вводу — больше НЕ переключает isLoading/isBlockingLoading
+
+    // MARK: - Debounce по вводу (без блокирующей загрузки)
     private func bindQueryDebounce() {
         $query
             .removeDuplicates()
@@ -730,8 +939,10 @@ final class SearchViewModel: ObservableObject {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .flatMap { [weak self] q -> AnyPublisher<[ImageHit], Never> in
                 guard let self, !q.isEmpty else { return Just([]).eraseToAnyPublisher() }
-                // без изменения флагов загрузки: "тихая" выдача
+                // «тихий» поиск: не трогаем isBlockingLoading, можно не трогать и isLoading,
+                // чтобы не мигал спиннер при наборе
                 return self.search.searchByName(q)
+                    .map { $0 }
                     .catch { [weak self] err -> AnyPublisher<[ImageHit], Never> in
                         self?.errorText = err.localizedDescription
                         return Just([]).eraseToAnyPublisher()
@@ -741,54 +952,85 @@ final class SearchViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .assign(to: &$results)
     }
-    
-    // 2) Явный запуск по кнопке — включает и спиннер, и модалку
+
+    // MARK: - Явный запуск по кнопке «Find»
     func runNameSearch() {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
+
         isLoading = true
         isBlockingLoading = true
         errorText = nil
-        
+
         search.searchByName(q)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] completion in
-                self?.isLoading = false
-                self?.isBlockingLoading = false
+                guard let self else { return }
+                self.isLoading = false
+                self.isBlockingLoading = false
                 if case .failure(let err) = completion {
-                    self?.errorText = err.localizedDescription
-                    self?.results = []
+                    self.errorText = err.localizedDescription
+                    self.results = []
                 }
             } receiveValue: { [weak self] hits in
-                self?.results = hits
+                guard let self else { return }
+                self.results = hits
+
+                // Сохраняем историю (только при успехе)
+                let previewTitle  = hits.first?.title
+                let previewSource = hits.first?.source
+                let rec = HistoryRecord(
+                    kind: .name,
+                    query: q,
+                    imageJPEG: nil,
+                    titlePreview: previewTitle,
+                    sourcePreview: previewSource
+                )
+                self.history.add(rec)
             }
             .store(in: &bag)
     }
-    
+
+    // MARK: - Запуск по кнопке «Analyze» (по фото)
     func runImageSearch(jpegData: Data) {
         isLoading = true
         isBlockingLoading = true
         errorText = nil
-        
+
         search.searchByImage(jpegData)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] completion in
-                self?.isLoading = false
-                self?.isBlockingLoading = false
+                guard let self else { return }
+                self.isLoading = false
+                self.isBlockingLoading = false
                 if case .failure(let err) = completion {
-                    self?.errorText = err.localizedDescription
-                    self?.results = []
+                    self.errorText = err.localizedDescription
+                    self.results = []
                 }
             } receiveValue: { [weak self] hits in
-                self?.results = hits
+                guard let self else { return }
+                self.results = hits
+
+                // Мини-превью для истории (жмем сильнее, чтобы экономить место)
+                let thumbData = (UIImage(data: jpegData)?
+                    .jpegData(compressionQuality: 0.5)) ?? jpegData
+
+                let rec = HistoryRecord(
+                    kind: .face,
+                    query: nil,
+                    imageJPEG: thumbData,
+                    titlePreview: hits.first?.title,
+                    sourcePreview: hits.first?.source
+                )
+                self.history.add(rec)
             }
             .store(in: &bag)
     }
-    
-    func onSubmit() {
-        if settings.isHistoryEnabled {
-            history.add(query)
-        }
+
+    // MARK: - Прочее (если нужно использовать)
+    func resetResults() {
+        results = []
+        errorText = nil
     }
 }
 //
@@ -804,109 +1046,166 @@ import UIKit
 
 struct FaceSearchView: View {
     @ObservedObject var vm: SearchViewModel
+    @Environment(\.dismiss) private var dismiss
 
     @State private var item: PhotosPickerItem?
     @State private var image: UIImage?
+
     @State private var goResults = false
     @State private var didAnalyze = false
 
     var body: some View {
-        VStack(spacing: Tokens.Spacing.x16) {
+        ZStack {
+            Tokens.Color.backgroundMain.ignoresSafeArea()
 
-            // 🖼 Превью или заглушка
-            Group {
-                if let img = image {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFit()
-                        .cornerRadiusContinuous(Tokens.Radius.medium)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
-                                .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+            VStack(spacing: Tokens.Spacing.x16) {
+                // Header
+                HStack {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "arrow.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Tokens.Color.textPrimary)
+                            .padding(12)
+                            .background(
+                                Tokens.Color.surfaceCard,
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            )
+                            .apply(Tokens.Shadow.card)
+                    }
+
+                    Spacer()
+
+                    Text("Face search")
+                        .font(Tokens.Font.title)
+                        .foregroundStyle(Tokens.Color.textPrimary)
+
+                    Spacer().frame(width: 44)
+                }
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.top, Tokens.Spacing.x16)
+
+                // Preview
+                Group {
+                    if let img = image {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, Tokens.Spacing.x16)
+                            .padding(.top, Tokens.Spacing.x12)
+                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+                            )
+                    } else {
+                        ContentUnavailableView(
+                            "Select a photo",
+                            systemImage: "photo",
+                            description: Text("Pick one image to search by face.")
                         )
-                        .frame(maxHeight: 320)
-                } else {
-                    ContentUnavailableView(
-                        "Select a photo",
-                        systemImage: "photo",
-                        description: Text("Pick one image to search by face.")
-                    )
-                    .frame(maxHeight: 320)
+                        .padding(.horizontal, Tokens.Spacing.x16)
+                        .padding(.top, Tokens.Spacing.x32)
+                    }
                 }
-            }
 
-            // 🗂 PhotosPicker (свой вид кнопки)
-            PhotosPicker(selection: $item, matching: .images, photoLibrary: .shared()) {
-                Text("Choose from Library")
-                    .font(Tokens.Font.subtitle)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        Tokens.Color.accent,
-                        in: RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
-                    )
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
-            .onChange(of: item) { _, newValue in
-                Task { @MainActor in
-                    guard let data = try? await newValue?.loadTransferable(type: Data.self),
-                          let img = UIImage(data: data) else { return }
-                    image = img
-                }
-            }
-
-            // ⚙️ Кнопка анализа
-            PrimaryButton(
-                "Analyze",
-                isLoading: vm.isLoading,
-                isDisabled: image == nil || vm.isLoading
-            ) {
-                guard let img = image,
-                      let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
-                didAnalyze = true
-                vm.runImageSearch(jpegData: jpeg)
-            }
-
-            // ❗ Ошибка, если есть
-            if let err = vm.errorText {
-                Text(err)
-                    .foregroundStyle(.red)
-                    .font(Tokens.Font.captionRegular)
-            }
-
-            Spacer()
         }
-        .padding(.horizontal, Tokens.Spacing.x16)
-        .padding(.top, Tokens.Spacing.x24)
-        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
-        .navigationTitle("Face search")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
 
-        // 👇 Навигация к результатам по окончанию загрузки
+        // Bottom tools panel (как на макете)
+        .safeAreaInset(edge: .bottom) {
+            HStack(spacing: Tokens.Spacing.x16) {
+                CircleTool(system: "rotate.left")  { /* позже */ }
+                CircleTool(system: "rotate.right") { /* позже */ }
+                CircleTool(system: "crop")         { /* позже */ }
+
+                Spacer()
+
+                // Pink CTA →
+                Button {
+                    guard let img = image,
+                          let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
+                    didAnalyze = true
+                    vm.runImageSearch(jpegData: jpeg)
+                } label: {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 52, height: 52)
+                        .background(
+                            Tokens.Color.accent,
+                            in: Circle()
+                        )
+                        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                }
+                .buttonStyle(.plain)
+                .disabled(image == nil || vm.isLoading)
+            }
+            .padding(.horizontal, Tokens.Spacing.x20)
+            .padding(.vertical, Tokens.Spacing.x16)
+            .background(
+                Tokens.Color.surfaceCard,
+                ignoresSafeAreaEdges: .bottom
+            )
+        }
+
+        // PhotosPicker (кнопка из верхней зоны не нужна – откроем по тапу на превью-заглушку)
+        .photosPicker(isPresented: Binding(
+            get: { image == nil && item == nil }, set: { _ in }
+        ), selection: $item, matching: .images)
+
+        .onChange(of: item) { _, newValue in
+            Task { @MainActor in
+                guard let data = try? await newValue?.loadTransferable(type: Data.self),
+                      let img = UIImage(data: data) else { return }
+                image = img
+            }
+        }
+
+        // Навигация к результатам
         .onChange(of: vm.isLoading) { was, isNow in
             if didAnalyze && was == true && isNow == false {
                 didAnalyze = false
                 goResults = true
             }
         }
-
-        // переход на экран результатов
         .navigationDestination(isPresented: $goResults) {
-            SearchResultsView(results: vm.results)
+            SearchResultsView(results: vm.results, mode: .face)
         }
+
+        // Loading over fullscreen (с превью и прогрессом)
         .fullScreenCover(
             isPresented: Binding(
-                get: { vm.isLoading },
-                set: { _ in /* игнорируем внешние изменения */ }
+                get: { vm.isBlockingLoading },
+                set: { _ in }
             )
         ) {
-            LoadingView(mode: .face, cancelAction: {
-                // vm.cancelImageSearch()
-            })
-            .interactiveDismissDisabled(true)
+            LoadingView(mode: .face, previewImage: image, cancelAction: nil)
+                .interactiveDismissDisabled(true)
         }
+    }
+}
 
+private struct CircleTool: View {
+    let system: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Tokens.Color.textPrimary)
+                .frame(width: 48, height: 48)
+                .background(
+                    Tokens.Color.backgroundMain,
+                    in: Circle()
+                )
+                .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
     }
 }
 //
@@ -996,80 +1295,102 @@ private struct CardRow: View {
 //  NameSearchView.swift
 //  CheaterBuster
 //
-//  Created by Niiaz Khasanov on 10/27/25.
-//
 
 import SwiftUI
 
 struct NameSearchView: View {
     @ObservedObject var vm: SearchViewModel
+    @Environment(\.dismiss) private var dismiss
 
     @State private var goResults = false
     @State private var didSubmit = false
 
     var body: some View {
-        VStack(spacing: Tokens.Spacing.x16) {
-            // 🔍 Поле поиска
-            SearchField("Partner's name...", text: $vm.query)
+        ZStack {
+            Tokens.Color.backgroundMain.ignoresSafeArea()
 
-            // 🔘 Кнопка поиска + индикатор
-            HStack(spacing: Tokens.Spacing.x12) {
-                PrimaryButton(
-                    "Find",
-                    isDisabled: vm.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ) {
-                    didSubmit = true
-                    vm.onSubmit()
-                    vm.runNameSearch()
+            VStack(alignment: .leading, spacing: Tokens.Spacing.x16) {
+                // Header
+                HStack {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "arrow.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Tokens.Color.textPrimary)
+                            .padding(12)
+                            .background(
+                                Tokens.Color.surfaceCard,
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            )
+                            .apply(Tokens.Shadow.card)
+                    }
+
+                    Spacer()
+
+                    Text("Name search")
+                        .font(Tokens.Font.title)
+                        .foregroundStyle(Tokens.Color.textPrimary)
+
+                    Spacer().frame(width: 44) // симметрия
                 }
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.top, Tokens.Spacing.x16)
 
-                if vm.isLoading {
-                    ProgressView()
+                // Search field
+                VStack(spacing: Tokens.Spacing.x16) {
+                    SearchField("Partner's name...", text: $vm.query)
+                        .padding(.horizontal, Tokens.Spacing.x16)
+
+                    Spacer(minLength: Tokens.Spacing.x16)
                 }
             }
-
-            // ❗ Ошибка, если есть
-            if let err = vm.errorText {
-                Text(err)
-                    .foregroundStyle(.red)
-                    .font(Tokens.Font.captionRegular)
-            }
-
-            Spacer()
         }
-        .padding(.horizontal, Tokens.Spacing.x16)
-        .padding(.top, Tokens.Spacing.x24)
-        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
-        .navigationTitle("Name search")
+        .navigationBarBackButtonHidden(true)
         .navigationBarTitleDisplayMode(.inline)
 
-        // 👇 Навигация к результатам — когда загрузка завершилась
+        // Нижняя большая кнопка Find
+        .safeAreaInset(edge: .bottom) {
+            HStack {
+                PrimaryButton(
+                    "Find",
+                    isLoading: vm.isLoading,
+                    isDisabled: vm.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || vm.isLoading
+                ) {
+                    didSubmit = true
+                    vm.runNameSearch()
+                }
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.vertical, Tokens.Spacing.x16)
+            .background(
+                Tokens.Color.backgroundMain,
+                ignoresSafeAreaEdges: .bottom
+            )
+        }
+
+        // Когда блокирующая загрузка завершилась после нажатия — переходим к результатам
         .onChange(of: vm.isLoading) { was, isNow in
             if didSubmit && was == true && isNow == false {
                 didSubmit = false
                 goResults = true
             }
         }
-
-        // переход на экран результатов
         .navigationDestination(isPresented: $goResults) {
-            SearchResultsView(results: vm.results)
+            SearchResultsView(results: vm.results, mode: .name)
         }
+
+        // Фуллскрин загрузка (computed Binding — без попытки записывать обратно)
         .fullScreenCover(
             isPresented: Binding(
-                get: { vm.isLoading },
-                set: { _ in /* игнорируем внешние изменения */ }
+                get: { vm.isBlockingLoading },
+                set: { _ in }
             )
         ) {
-            LoadingView(mode: .name, cancelAction: {
-                // Тут позже можно вызвать отмену поиска
-                // vm.cancelNameSearch()
-            })
-            .interactiveDismissDisabled(true) // запрет свайпа-вниз
+            LoadingView(mode: .name, previewImage: nil, cancelAction: nil)
+                .interactiveDismissDisabled(true)
         }
-
     }
-    
 }
 //
 //  SearchResultsView.swift
@@ -1079,55 +1400,131 @@ struct NameSearchView: View {
 //
 
 
-
 import SwiftUI
 
 struct SearchResultsView: View {
+    enum Mode { case face, name }
+
     let results: [ImageHit]
+    let mode: Mode
+
+    private let columns = [
+        GridItem(.flexible(), spacing: Tokens.Spacing.x16),
+        GridItem(.flexible(), spacing: Tokens.Spacing.x16)
+    ]
+
+    @Namespace private var ns
 
     var body: some View {
-        Group {
+        ScrollView {
             if results.isEmpty {
                 ContentUnavailableView(
                     "No results found",
-                    systemImage: "face.dashed",
+                    systemImage: "magnifyingglass.circle",
                     description: Text("No matches found. Please try a different photo or name.")
                 )
                 .padding(.top, Tokens.Spacing.x24)
             } else {
-                List(results) { hit in
-                    HStack(spacing: Tokens.Spacing.x12) {
-                        AsyncImage(url: hit.thumbnailURL) { phase in
-                            switch phase {
-                            case .empty: ProgressView()
-                            case .success(let img): img.resizable().scaledToFill()
-                            case .failure: Color.gray.opacity(0.2)
-                            @unknown default: Color.gray.opacity(0.2)
-                            }
-                        }
-                        .frame(width: 64, height: 64)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(hit.title).lineLimit(1)
-                            Text(hit.source).font(.caption).foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        if let url = hit.linkURL {
-                            Link(destination: url) {
-                                Image(systemName: "arrow.up.right.square")
-                            }
+                LazyVGrid(columns: columns, spacing: Tokens.Spacing.x16) {
+                    ForEach(results) { hit in
+                        if mode == .face {
+                            FaceResultCard(hit: hit)
+                        } else {
+                            NameResultCard(hit: hit)
                         }
                     }
-                    .listRowSeparator(.hidden)
                 }
-                .listStyle(.plain)
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.vertical, Tokens.Spacing.x24)
+                .animation(.easeInOut(duration: 0.25), value: results)
             }
         }
-        .navigationTitle(results.isEmpty ? "No results" : "Name results")
+        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+        .navigationTitle(mode == .face ? "Face results" : "Name results")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Cards
+
+private struct FaceResultCard: View {
+    let hit: ImageHit
+
+    var body: some View {
+        VStack(spacing: Tokens.Spacing.x8) {
+            AsyncThumb(url: hit.thumbnailURL)
+                .frame(height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Tokens.Color.surfaceCard,
+            in: RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+        )
+        .apply(Tokens.Shadow.card)
+    }
+}
+
+private struct NameResultCard: View {
+    let hit: ImageHit
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.Spacing.x8) {
+            AsyncThumb(url: hit.thumbnailURL)
+                .frame(height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(hit.title)
+                    .font(Tokens.Font.caption)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+                    .lineLimit(1)
+                Text(hit.source)
+                    .font(Tokens.Font.captionRegular)
+                    .foregroundStyle(Tokens.Color.textSecondary)
+                    .lineLimit(1)
+            }
+
+            if let url = hit.linkURL {
+                Link(destination: url) {
+                    HStack(spacing: 4) {
+                        Text("Open")
+                        Image(systemName: "arrow.up.right.square")
+                    }
+                    .font(Tokens.Font.caption)
+                    .foregroundStyle(Tokens.Color.accent)
+                }
+                .padding(.top, Tokens.Spacing.x4)
+            }
+        }
+        .padding(Tokens.Spacing.x12)
+        .background(
+            Tokens.Color.surfaceCard,
+            in: RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+        )
+        .apply(Tokens.Shadow.card)
+    }
+}
+
+private struct AsyncThumb: View {
+    let url: URL?
+    var body: some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .empty:
+                ZStack { Color.gray.opacity(0.1); ProgressView() }
+            case .success(let image):
+                image.resizable().scaledToFill().clipped()
+            case .failure:
+                ZStack {
+                    Color.gray.opacity(0.2)
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(.gray)
+                }
+            @unknown default:
+                EmptyView()
+            }
+        }
     }
 }
 //
@@ -1144,94 +1541,421 @@ struct LoadingView: View {
     enum Mode { case name, face }
 
     let mode: Mode
+    let previewImage: UIImage?
     let cancelAction: (() -> Void)?
+
+    @State private var progress: CGFloat = 0.35 // моковый прогресс для визуала
 
     var body: some View {
         ZStack {
-            Tokens.Color.backgroundMain
-                .ignoresSafeArea()
+            Tokens.Color.backgroundMain.ignoresSafeArea()
 
             VStack(spacing: Tokens.Spacing.x24) {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: Tokens.Color.accent))
-                    .scaleEffect(1.6)
+                if mode == .face, let ui = previewImage {
+                    Image(uiImage: ui)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 260)
+                        .padding(.horizontal, Tokens.Spacing.x16)
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+                        )
 
-                VStack(spacing: Tokens.Spacing.x8) {
-                    Text(titleText)
-                        .font(Tokens.Font.title)
+                    Text("Photo analysis")
+                        .font(Tokens.Font.bodyMedium18)
                         .foregroundStyle(Tokens.Color.textPrimary)
-                    Text(subtitleText)
-                        .font(Tokens.Font.captionRegular)
-                        .foregroundStyle(Tokens.Color.textSecondary)
+
+                    // Простой прогресс (визуальный)
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Tokens.Color.borderNeutral.opacity(0.4)).frame(height: 8)
+                        Capsule().fill(Tokens.Color.accent).frame(width: progressWidth, height: 8)
+                    }
+                    .padding(.horizontal, Tokens.Spacing.x16)
+                } else {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: Tokens.Color.accent))
+                        .scaleEffect(1.6)
+
+                    Text("Searching...")
+                        .font(Tokens.Font.bodyMedium18)
+                        .foregroundStyle(Tokens.Color.textPrimary)
                 }
 
                 if let cancelAction {
-                    Button("Cancel") {
-                        cancelAction()
-                    }
-                    .font(Tokens.Font.bodyMedium18)
-                    .foregroundStyle(Tokens.Color.textSecondary)
-                    .padding(.top, Tokens.Spacing.x16)
+                    Button("Cancel") { cancelAction() }
+                        .font(Tokens.Font.caption)
+                        .foregroundStyle(Tokens.Color.textSecondary)
+                        .padding(.top, Tokens.Spacing.x8)
                 }
+
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, Tokens.Spacing.x32)
+            .padding(.top, Tokens.Spacing.x24)
+        }
+        .onAppear {
+            // лёгкая псевдо-анимация прогресса
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                progress = 0.7
+            }
         }
     }
 
-    private var titleText: String {
-        switch mode {
-        case .name: return "Searching..."
-        case .face: return "Analyzing photo..."
-        }
-    }
-
-    private var subtitleText: String {
-        switch mode {
-        case .name: return "Looking for matches across sources"
-        case .face: return "Comparing with open profiles"
-        }
+    private var progressWidth: CGFloat {
+        // просто визуально — 35..70% ширины экрана
+        UIScreen.main.bounds.width * progress
     }
 }
 //
 //  HistoryViewModel.swift
 //  CheaterBuster
 //
-//  Created by Niiaz Khasanov on 10/28/25.
-//
 
 import Foundation
 import Combine
+import UIKit
 
 final class HistoryViewModel: ObservableObject {
-    @Published private(set) var items: [String] = []
+    // MARK: Search-history
+    @Published private(set) var items: [HistoryRecord] = []
+
+    // MARK: Cheater-history
+    @Published private(set) var cheaterItems: [CheaterRecord] = []
+
+    @Published var segment: Segment = .search
+    enum Segment: Equatable { case search, cheater }
+
+    // Навигация/статусы для реплея поиска
+    @Published private(set) var rerunResults: [ImageHit] = []
+    @Published private(set) var isLoading = false
+    @Published var errorText: String?
+
     private let store: HistoryStore
+    private let cheaterStore: CheaterStore
+    private let search: SearchService
     private var bag = Set<AnyCancellable>()
-    init(store: HistoryStore) {
+
+    init(store: HistoryStore,
+         cheaterStore: CheaterStore,
+         search: SearchService) {
         self.store = store
+        self.cheaterStore = cheaterStore
+        self.search = search
+        reload()
+    }
+
+    func reload() {
+        items = store.load()
+        cheaterItems = cheaterStore.load()
+    }
+
+    // MARK: Search tab
+    func clearSearch() {
+        store.clearAll()
+        items = []
+    }
+
+    func onTapSearch(_ rec: HistoryRecord) {
+        // повтор поиска
+        isLoading = true
+        errorText = nil
+
+        let pub: AnyPublisher<[ImageHit], Error>
+        if rec.kind == .name, let q = rec.query {
+            pub = search.searchByName(q)
+        } else if rec.kind == .face, let data = rec.imageJPEG {
+            pub = search.searchByImage(data)
+        } else {
+            isLoading = false
+            return
+        }
+
+        pub
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] comp in
+                self?.isLoading = false
+                if case .failure(let err) = comp {
+                    self?.errorText = err.localizedDescription
+                }
+            } receiveValue: { [weak self] hits in
+                self?.rerunResults = hits
+            }
+            .store(in: &bag)
+    }
+
+    // MARK: Cheater tab
+    func clearCheater() {
+        cheaterStore.clearAll()
+        cheaterItems = []
+    }
+
+    // На этом шаге «повтор анализа» не включаем, просто оставим заглушку.
+    // Позже, когда подключим CheaterService, откроем экран результата/реплей задачи.
+    func onTapCheater(_ rec: CheaterRecord) {
+        // TODO: navigate to CheaterResultView (в следующем шаге)
     }
 }
 //
-//  HistoryScreen.swift
+//  HistoryView.swift
 //  CheaterBuster
-//
-//  Created by Niiaz Khasanov on 10/28/25.
 //
 
 import SwiftUI
 
-struct HistoryScreen: View {
+struct HistoryView: View {
+    @StateObject var vm: HistoryViewModel
+    @State private var goResults = false
+
     var body: some View {
-        NavigationStack {
-            ContentUnavailableView(
-                "No history",
-                systemImage: "clock",
-                description: Text("Your last 10 searches will appear here.")
-            )
-            .navigationTitle("History")
+        VStack(spacing: 0) {
+            // Title
+            HStack {
+                Text("History")
+                    .font(Tokens.Font.title)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+                Spacer()
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.top, Tokens.Spacing.x16)
+
+            // Segment
+            SegmentCapsule(selected: $vm.segment)
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.top, Tokens.Spacing.x12)
+
+            // Content
+            Group {
+                if vm.segment == .search {
+                    topBarClear(isHidden: vm.items.isEmpty) { vm.clearSearch() }
+                    HistoryGrid(items: vm.items) { rec in
+                        vm.onTapSearch(rec)
+                    }
+                    .padding(.horizontal, Tokens.Spacing.x16)
+                    .padding(.top, Tokens.Spacing.x16)
+                } else {
+                    topBarClear(isHidden: vm.cheaterItems.isEmpty) { vm.clearCheater() }
+                    CheaterList(items: vm.cheaterItems) { rec in
+                        vm.onTapCheater(rec)
+                    }
+                    .padding(.horizontal, Tokens.Spacing.x16)
+                    .padding(.top, Tokens.Spacing.x16)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+        .navigationBarTitleDisplayMode(.inline)
+
+        // Search rerun -> results
+        .onChange(of: vm.rerunResults) { _, hits in
+            if !hits.isEmpty { goResults = true }
+        }
+        .navigationDestination(isPresented: $goResults) {
+            SearchResultsView(results: vm.rerunResults, mode: .name)
+        }
+    }
+
+    // small helper
+    @ViewBuilder
+    private func topBarClear(isHidden: Bool, action: @escaping () -> Void) -> some View {
+        HStack {
+            Spacer()
+            if !isHidden {
+                Button("Clear") { action() }
+                    .font(Tokens.Font.caption)
+                    .foregroundStyle(Tokens.Color.accent)
+            }
+        }
+        .padding(.horizontal, Tokens.Spacing.x16)
+        .padding(.top, Tokens.Spacing.x8)
+    }
+}
+
+// MARK: - Segment
+
+private struct SegmentCapsule: View {
+    @Binding var selected: HistoryViewModel.Segment
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Tokens.Color.surfaceCard)
+                .apply(Tokens.Shadow.card)
+
+            HStack(spacing: 0) {
+                seg("Search", .search)
+                seg("Cheater", .cheater)
+            }
+        }
+        .frame(height: 44)
+    }
+
+    private func seg(_ title: String, _ seg: HistoryViewModel.Segment) -> some View {
+        Button { selected = seg } label: {
+            Text(title)
+                .font(Tokens.Font.caption)
+                .foregroundStyle(selected == seg ? .white : Tokens.Color.textPrimary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    Group {
+                        if selected == seg {
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .fill(Tokens.Color.accent)
+                        }
+                    }
+                )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Search grid (как раньше)
+
+private struct HistoryGrid: View {
+    let items: [HistoryRecord]
+    let onTap: (HistoryRecord) -> Void
+
+    private let columns = [
+        GridItem(.flexible(), spacing: Tokens.Spacing.x16),
+        GridItem(.flexible(), spacing: Tokens.Spacing.x16)
+    ]
+
+    var body: some View {
+        if items.isEmpty {
+            ContentUnavailableView("No history yet",
+                                   systemImage: "clock.arrow.circlepath",
+                                   description: Text("Your last 10 searches will appear here."))
+                .padding(.top, Tokens.Spacing.x24)
+        } else {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: Tokens.Spacing.x16) {
+                    ForEach(items) { rec in
+                        Button { onTap(rec) } label: {
+                            HistoryCard(rec: rec)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.bottom, Tokens.Spacing.x24)
+            }
         }
     }
 }
 
+private struct HistoryCard: View {
+    let rec: HistoryRecord
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.Spacing.x8) {
+            if rec.kind == .face, let d = rec.imageJPEG, let img = UIImage(data: d) {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 150)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            } else {
+                ZStack {
+                    Tokens.Color.backgroundMain
+                    Image(systemName: "person.text.rectangle")
+                        .font(.system(size: 28))
+                        .foregroundStyle(Tokens.Color.textSecondary)
+                }
+                .frame(height: 150)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            if let q = rec.query {
+                Text(q).font(Tokens.Font.caption)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+                    .lineLimit(1)
+            }
+            if let s = rec.sourcePreview {
+                Text(s).font(Tokens.Font.captionRegular)
+                    .foregroundStyle(Tokens.Color.textSecondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(Tokens.Spacing.x12)
+        .background(
+            Tokens.Color.surfaceCard,
+            in: RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+        )
+        .apply(Tokens.Shadow.card)
+    }
+}
+
+// MARK: - Cheater list
+
+private struct CheaterList: View {
+    let items: [CheaterRecord]
+    let onTap: (CheaterRecord) -> Void
+
+    var body: some View {
+        if items.isEmpty {
+            ContentUnavailableView("No cheater items yet",
+                                   systemImage: "text.magnifyingglass",
+                                   description: Text("Analyze a chat to see it here."))
+                .padding(.top, Tokens.Spacing.x24)
+        } else {
+            ScrollView {
+                VStack(spacing: Tokens.Spacing.x12) {
+                    ForEach(items) { rec in
+                        Button { onTap(rec) } label: {
+                            CheaterRow(rec: rec)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.bottom, Tokens.Spacing.x24)
+            }
+        }
+    }
+}
+
+private struct CheaterRow: View {
+    let rec: CheaterRecord
+
+    var body: some View {
+        HStack(spacing: Tokens.Spacing.x12) {
+            // Левая иконка (как в макете)
+            ZStack {
+                Tokens.Color.backgroundMain
+                Image(systemName: rec.kind == .file ? "folder" : "photo")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Tokens.Color.accent)
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("High risk level")
+                    .font(Tokens.Font.caption)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+                if let note = rec.note, !note.isEmpty {
+                    Text(note)
+                        .font(Tokens.Font.captionRegular)
+                        .foregroundStyle(Tokens.Color.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            // % справа
+            Text("\(rec.riskScore)%")
+                .font(Tokens.Font.caption)
+                .foregroundStyle(Tokens.Color.textPrimary)
+        }
+        .padding(.vertical, Tokens.Spacing.x12)
+        .padding(.horizontal, Tokens.Spacing.x12)
+        .background(
+            Tokens.Color.surfaceCard,
+            in: RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+        )
+        .apply(Tokens.Shadow.card)
+    }
+}
 //
 //  CheaterViewModel.swift
 //  CheaterBuster

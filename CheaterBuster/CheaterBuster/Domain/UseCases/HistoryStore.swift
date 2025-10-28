@@ -9,8 +9,7 @@ import Foundation
 import Combine
 
 public protocol HistoryStore {
-    var itemsPublisher: AnyPublisher<[String],Never> { get }
-    func add (_ item:String)
-    func get() -> [String]
-    func clear()
+    func load() -> [HistoryRecord]
+    func add(_ record: HistoryRecord)
+    func clearAll()
 }
