@@ -244,7 +244,6 @@ private struct CheaterRow: View {
             
             Spacer()
             
-            // % справа
             Text("\(rec.riskScore)%")
                 .font(Tokens.Font.caption)
                 .foregroundStyle(Tokens.Color.textPrimary)

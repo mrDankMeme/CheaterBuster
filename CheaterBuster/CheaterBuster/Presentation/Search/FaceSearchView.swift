@@ -118,7 +118,7 @@ struct FaceSearchView: View {
             )
         }
 
-        // PhotosPicker (кнопка из верхней зоны не нужна – откроем по тапу на превью-заглушку)
+        
         .photosPicker(isPresented: Binding(
             get: { image == nil && item == nil }, set: { _ in }
         ), selection: $item, matching: .images)
@@ -131,7 +131,7 @@ struct FaceSearchView: View {
             }
         }
 
-        // Навигация к результатам
+        
         .onChange(of: vm.isLoading) { was, isNow in
             if didAnalyze && was == true && isNow == false {
                 didAnalyze = false
@@ -142,7 +142,7 @@ struct FaceSearchView: View {
             SearchResultsView(results: vm.results, mode: .face)
         }
 
-        // Loading over fullscreen (с превью и прогрессом)
+        
         .fullScreenCover(
             isPresented: Binding(
                 get: { vm.isBlockingLoading },

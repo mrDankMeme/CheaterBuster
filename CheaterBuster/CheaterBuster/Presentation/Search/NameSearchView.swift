@@ -76,7 +76,7 @@ struct NameSearchView: View {
             )
         }
 
-        // Когда блокирующая загрузка завершилась после нажатия — переходим к результатам
+        
         .onChange(of: vm.isLoading) { was, isNow in
             if didSubmit && was == true && isNow == false {
                 didSubmit = false
@@ -87,7 +87,7 @@ struct NameSearchView: View {
             SearchResultsView(results: vm.results, mode: .name)
         }
 
-        // Фуллскрин загрузка (computed Binding — без попытки записывать обратно)
+        
         .fullScreenCover(
             isPresented: Binding(
                 get: { vm.isBlockingLoading },

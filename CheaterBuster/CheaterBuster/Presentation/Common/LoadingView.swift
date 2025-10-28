@@ -75,7 +75,6 @@ struct LoadingView: View {
     }
 
     private var progressWidth: CGFloat {
-        // просто визуально — 35..70% ширины экрана
         UIScreen.main.bounds.width * progress
     }
 }

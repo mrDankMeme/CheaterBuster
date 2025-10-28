@@ -52,8 +52,7 @@ final class SearchViewModel: ObservableObject {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .flatMap { [weak self] q -> AnyPublisher<[ImageHit], Never> in
                 guard let self, !q.isEmpty else { return Just([]).eraseToAnyPublisher() }
-                // «тихий» поиск: не трогаем isBlockingLoading, можно не трогать и isLoading,
-                // чтобы не мигал спиннер при наборе
+                
                 return self.search.searchByName(q)
                     .map { $0 }
                     .catch { [weak self] err -> AnyPublisher<[ImageHit], Never> in
@@ -89,7 +88,7 @@ final class SearchViewModel: ObservableObject {
                 guard let self else { return }
                 self.results = hits
 
-                // Сохраняем историю (только при успехе)
+                
                 let previewTitle  = hits.first?.title
                 let previewSource = hits.first?.source
                 let rec = HistoryRecord(
@@ -124,7 +123,7 @@ final class SearchViewModel: ObservableObject {
                 guard let self else { return }
                 self.results = hits
 
-                // Мини-превью для истории (жмем сильнее, чтобы экономить место)
+                
                 let thumbData = (UIImage(data: jpegData)?
                     .jpegData(compressionQuality: 0.5)) ?? jpegData
 

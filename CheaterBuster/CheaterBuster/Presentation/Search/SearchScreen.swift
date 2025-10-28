@@ -32,15 +32,13 @@ struct SearchScreen: View {
                     CardRow(
                         icon: "face.smiling",
                         title: "Finding a partner by face"
-                    ) { goPhoto = true }        
+                    ) { goPhoto = true }
                 }
 
                 Spacer()
             }
             .padding(.horizontal, Tokens.Spacing.x16)
             .background(Tokens.Color.backgroundMain.ignoresSafeArea())
-
-            // ⬇️ ОБА destination — ВНУТРИ NavigationStack
             .navigationDestination(isPresented: $goName) {
                 NameSearchView(vm: vm)
             }

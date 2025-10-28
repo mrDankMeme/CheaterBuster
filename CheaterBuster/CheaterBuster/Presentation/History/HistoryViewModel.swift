@@ -81,8 +81,7 @@ final class HistoryViewModel: ObservableObject {
         cheaterItems = []
     }
 
-    // На этом шаге «повтор анализа» не включаем, просто оставим заглушку.
-    // Позже, когда подключим CheaterService, откроем экран результата/реплей задачи.
+ 
     func onTapCheater(_ rec: CheaterRecord) {
         // TODO: navigate to CheaterResultView (в следующем шаге)
     }

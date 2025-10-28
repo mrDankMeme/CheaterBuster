@@ -15,7 +15,6 @@ struct CheaterBusterApp: App {
     private var resolver: Resolver { assembler.resolver }
 
     init() {
-        // сидим СРАЗУ при старте приложения
         DevSeed.run(resolver)
     }
 
