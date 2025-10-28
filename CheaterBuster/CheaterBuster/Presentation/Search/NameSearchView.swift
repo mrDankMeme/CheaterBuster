@@ -61,5 +61,19 @@ struct NameSearchView: View {
         .navigationDestination(isPresented: $goResults) {
             SearchResultsView(results: vm.results)
         }
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { vm.isLoading },
+                set: { _ in /* игнорируем внешние изменения */ }
+            )
+        ) {
+            LoadingView(mode: .name, cancelAction: {
+                // Тут позже можно вызвать отмену поиска
+                // vm.cancelNameSearch()
+            })
+            .interactiveDismissDisabled(true) // запрет свайпа-вниз
+        }
+
     }
+    
 }

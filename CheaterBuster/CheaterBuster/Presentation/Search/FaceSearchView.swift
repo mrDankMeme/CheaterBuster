@@ -102,5 +102,17 @@ struct FaceSearchView: View {
         .navigationDestination(isPresented: $goResults) {
             SearchResultsView(results: vm.results)
         }
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { vm.isLoading },
+                set: { _ in /* игнорируем внешние изменения */ }
+            )
+        ) {
+            LoadingView(mode: .face, cancelAction: {
+                // vm.cancelImageSearch()
+            })
+            .interactiveDismissDisabled(true)
+        }
+
     }
 }

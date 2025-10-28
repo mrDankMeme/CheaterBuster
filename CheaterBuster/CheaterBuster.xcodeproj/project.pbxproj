@@ -41,6 +41,7 @@
 		A35FF3A22EB108C20000E890 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3A12EB108C20000E890 /* SearchResultsView.swift */; };
 		A35FF3A42EB10B2C0000E890 /* Corner+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3A32EB10B200000E890 /* Corner+Helpers.swift */; };
 		A35FF3A62EB10FCD0000E890 /* FaceSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3A52EB10FCD0000E890 /* FaceSearchView.swift */; };
+		A35FF3A92EB11AC50000E890 /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3A82EB11AC50000E890 /* LoadingView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -78,6 +79,7 @@
 		A35FF3A12EB108C20000E890 /* SearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsView.swift; sourceTree = "<group>"; };
 		A35FF3A32EB10B200000E890 /* Corner+Helpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Corner+Helpers.swift"; sourceTree = "<group>"; };
 		A35FF3A52EB10FCD0000E890 /* FaceSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceSearchView.swift; sourceTree = "<group>"; };
+		A35FF3A82EB11AC50000E890 /* LoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -183,6 +185,7 @@
 		A35FF35E2EB0CE200000E890 /* Presentation */ = {
 			isa = PBXGroup;
 			children = (
+				A35FF3A72EB11ABE0000E890 /* Common */,
 				A35FF3622EB0CE450000E890 /* Settings */,
 				A35FF3612EB0CE3E0000E890 /* History */,
 				A35FF3602EB0CE310000E890 /* Cheater */,
@@ -266,6 +269,14 @@
 				A35FF3852EB0EA590000E890 /* SearchServiceImpl.swift */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		A35FF3A72EB11ABE0000E890 /* Common */ = {
+			isa = PBXGroup;
+			children = (
+				A35FF3A82EB11AC50000E890 /* LoadingView.swift */,
+			);
+			path = Common;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -358,6 +369,7 @@
 				A35FF3902EB0F42E0000E890 /* CheaterViewModel.swift in Sources */,
 				A35FF3922EB0FC040000E890 /* HistoryViewModel.swift in Sources */,
 				A35FF3732EB0D3460000E890 /* SettingsViewModel.swift in Sources */,
+				A35FF3A92EB11AC50000E890 /* LoadingView.swift in Sources */,
 				A35FF3982EB1047A0000E890 /* RootTabView.swift in Sources */,
 				A35FF3A62EB10FCD0000E890 /* FaceSearchView.swift in Sources */,
 				A35FF3752EB0D8350000E890 /* AppAssembler.swift in Sources */,
