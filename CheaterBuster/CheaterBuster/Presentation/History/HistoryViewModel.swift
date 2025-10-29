@@ -5,7 +5,6 @@
 //  Created by Niiaz Khasanov on 10/29/25.
 //
 
-
 import Foundation
 import Combine
 import UIKit
@@ -24,6 +23,9 @@ final class HistoryViewModel: ObservableObject {
     @Published private(set) var rerunResults: [ImageHit] = []
     @Published private(set) var isLoading = false
     @Published var errorText: String?
+
+    // Навигация в экран результата Cheater
+    @Published var selectedCheater: CheaterRecord?   // ← NEW
 
     private let store: HistoryStore
     private let cheaterStore: CheaterStore
@@ -84,8 +86,8 @@ final class HistoryViewModel: ObservableObject {
         cheaterItems = []
     }
 
- 
     func onTapCheater(_ rec: CheaterRecord) {
-        // TODO: navigate to CheaterResultView (в следующем шаге)
+        // Навигация в детальный экран результата
+        selectedCheater = rec
     }
 }

@@ -20,7 +20,7 @@ public struct HistoryRecord: Identifiable, Codable {
     public let kind: HistoryKind
 
     
-    public let query: String?
+    public let query : String?
 
     
     public let imageJPEG: Data?

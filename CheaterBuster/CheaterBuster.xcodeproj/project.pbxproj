@@ -63,6 +63,7 @@
 		A35FF3E62EB2324F0000E890 /* TaskPollerImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3E52EB2324F0000E890 /* TaskPollerImpl.swift */; };
 		A35FF3E92EB232AC0000E890 /* InMemoryTokenStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3E82EB232AC0000E890 /* InMemoryTokenStorage.swift */; };
 		A35FF3EF2EB24A090000E890 /* TaskCreateResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3EE2EB24A090000E890 /* TaskCreateResponse.swift */; };
+		A35FF3F12EB251950000E890 /* CheaterResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3F02EB251950000E890 /* CheaterResultView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -122,6 +123,7 @@
 		A35FF3E52EB2324F0000E890 /* TaskPollerImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskPollerImpl.swift; sourceTree = "<group>"; };
 		A35FF3E82EB232AC0000E890 /* InMemoryTokenStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryTokenStorage.swift; sourceTree = "<group>"; };
 		A35FF3EE2EB24A090000E890 /* TaskCreateResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskCreateResponse.swift; sourceTree = "<group>"; };
+		A35FF3F02EB251950000E890 /* CheaterResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheaterResultView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -251,6 +253,7 @@
 		A35FF3602EB0CE310000E890 /* Cheater */ = {
 			isa = PBXGroup;
 			children = (
+				A35FF3F02EB251950000E890 /* CheaterResultView.swift */,
 				A35FF39B2EB1060F0000E890 /* CheaterView.swift */,
 				A35FF38F2EB0F4270000E890 /* CheaterViewModel.swift */,
 			);
@@ -500,6 +503,7 @@
 				A35FF3882EB0ED3F0000E890 /* CheaterAnalyzerServiceImpl.swift in Sources */,
 				A35FF3842EB0EA100000E890 /* SettingsStore.swift in Sources */,
 				A35FF3E22EB231D30000E890 /* AuthRepositoryImpl.swift in Sources */,
+				A35FF3F12EB251950000E890 /* CheaterResultView.swift in Sources */,
 				A35FF3A02EB108940000E890 /* NameSearchView.swift in Sources */,
 				A35FF3A22EB108C20000E890 /* SearchResultsView.swift in Sources */,
 				A35FF3592EB00CF10000E890 /* SearchField.swift in Sources */,

@@ -675,8 +675,8 @@ final class TaskPollerImpl: TaskPoller {
         while true {
             let state = try await api.getAnalyzeTask(id: taskId)
             switch state.status {
-            case .completed, .failed: return state
-            case .queued, .running:
+            case .finished, .failed: return state
+            case .queued, .started, .other:
                 try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             }
         }
@@ -685,13 +685,9 @@ final class TaskPollerImpl: TaskPoller {
     func waitForReverseResult(taskId: UUID, interval: TimeInterval = 1.0) async throws -> ReverseSearchGetResponse {
         while true {
             let r = try await api.getReverseSearch(id: taskId)
-            // считаем «готово» как когда все движки != "queued"/"running"
-            let done: Bool = {
-                let s = r.status
-                return !["queued","running"].contains(s.google.lowercased())
-                && !["queued","running"].contains(s.yandex.lowercased())
-                && !["queued","running"].contains(s.bing.lowercased())
-            }()
+            // готово, когда все "completed"; любые другие (например "pending") — продолжаем
+            let done = [r.status.google, r.status.yandex, r.status.bing]
+                .allSatisfy { $0.lowercased() == "completed" }
             if done { return r }
             try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
         }
@@ -912,7 +908,7 @@ final class SearchServiceImpl: SearchService {
 //
 
 
-
+// Data/Services/API/CheaterAPIImpl.swift
 import Foundation
 
 final class CheaterAPIImpl: CheaterAPI {
@@ -930,11 +926,11 @@ final class CheaterAPIImpl: CheaterAPI {
         }
     }
 
-    // MARK: Conversation analyse (/api/task)
+    // MARK: - /api/task (files[], conversation?, app_bundle*, webhook_url?)
     func createAnalyzeTask(
         files: [MultipartFormData.FilePart],
         conversation: String?
-    ) async throws -> TaskCreateResponse {
+    ) async throws -> TaskReadDTO {
         let url = cfg.baseURL.appendingPathComponent("/api/task")
         var req = URLRequest(url: url); req.httpMethod = "POST"
         authed(&req)
@@ -944,26 +940,37 @@ final class CheaterAPIImpl: CheaterAPI {
             "conversation": conversation,
             "app_bundle": cfg.bundleId,
             "webhook_url": nil
-        ], files: files)
+        ], files: files.map { part in
+            // поле должно называться "files" (массив), даже если один файл
+            MultipartFormData.FilePart(
+                name: "files",
+                filename: part.filename,
+                mimeType: part.mimeType,
+                data: part.data
+            )
+        })
         req.setValue(mp.contentType, forHTTPHeaderField: "Content-Type")
         req.httpBody = body
         return try await http.send(req)
     }
 
-    // MARK: Place analyse (/api/task/place) — поле должно называться "file"
+    // MARK: - /api/task/place (file, conversation?, app_bundle*, webhook_url?)
     func createAnalyzePlaceTask(
         file: MultipartFormData.FilePart,
         conversation: String?
-    ) async throws -> TaskCreateResponse {
+    ) async throws -> TaskReadDTO {
         let url = cfg.baseURL.appendingPathComponent("/api/task/place")
         var req = URLRequest(url: url); req.httpMethod = "POST"
         authed(&req)
 
         let mp = MultipartFormData()
-        var one = file
-        // переименуем name строго в "file"
-        one = .init(name: "file", filename: file.filename, mimeType: file.mimeType, data: file.data)
-
+        // строго одно поле "file"
+        let one = MultipartFormData.FilePart(
+            name: "file",
+            filename: file.filename,
+            mimeType: file.mimeType,
+            data: file.data
+        )
         let body = mp.build(fields: [
             "conversation": conversation,
             "app_bundle": cfg.bundleId,
@@ -981,13 +988,20 @@ final class CheaterAPIImpl: CheaterAPI {
         return try await http.send(req)
     }
 
-    // MARK: Reverse search (без изменений)
+    // MARK: - Reverse search (без изменений в контракте)
     func createReverseSearch(image: MultipartFormData.FilePart) async throws -> ReverseSearchCreateResponse {
         let url = cfg.baseURL.appendingPathComponent("/api/search")
         var req = URLRequest(url: url); req.httpMethod = "POST"
         authed(&req)
         let mp = MultipartFormData()
-        let body = mp.build(fields: [:], files: [image])
+        let body = mp.build(fields: [:], files: [
+            MultipartFormData.FilePart(
+                name: "image",
+                filename: image.filename,
+                mimeType: image.mimeType,
+                data: image.data
+            )
+        ])
         req.setValue(mp.contentType, forHTTPHeaderField: "Content-Type")
         req.httpBody = body
         return try await http.send(req)
@@ -1009,6 +1023,7 @@ final class CheaterAPIImpl: CheaterAPI {
 
 
 
+// Domain/UseCases/TaskPoller.swift
 import Foundation
 
 protocol TaskPoller {
@@ -1142,21 +1157,21 @@ protocol CheaterStore {
 import Foundation
 
 protocol CheaterAPI {
-    // conversation analyse
+    // Анализ переписки/изображения
     func createAnalyzeTask(
         files: [MultipartFormData.FilePart],
         conversation: String?
-    ) async throws -> TaskCreateResponse
+    ) async throws -> TaskReadDTO
 
-    /// /api/task/place — ожидает одиночный "file"
+    // Поиск по месту (endpoint /api/task/place — важна форма "file")
     func createAnalyzePlaceTask(
         file: MultipartFormData.FilePart,
         conversation: String?
-    ) async throws -> TaskCreateResponse
+    ) async throws -> TaskReadDTO
 
     func getAnalyzeTask(id: UUID) async throws -> TaskReadDTO
 
-    // reverse image search (как было)
+    // Реверс-поиск изображений
     func createReverseSearch(image: MultipartFormData.FilePart) async throws -> ReverseSearchCreateResponse
     func getReverseSearch(id: UUID) async throws -> ReverseSearchGetResponse
 }
@@ -1211,18 +1226,78 @@ public protocol SettingsStore {
 
 import Foundation
 
-enum TaskStatus: String, Codable { case queued, running, completed, failed }
+// Статусы по докам: queued | started | failed | finished.
+// Поддержим "completed"/"running" как синонимы на всякий случай (бэк может дрейфовать).
+enum TaskStatus: Equatable {
+    case queued
+    case started
+    case failed
+    case finished
+    case other(String)
+}
 
-struct TaskResult: Codable {
+extension TaskStatus: Codable {
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self).lowercased()
+        switch raw {
+        case "queued":      self = .queued
+        case "started",
+             "running":     self = .started
+        case "finished",
+             "completed":   self = .finished
+        case "failed":      self = .failed
+        default:            self = .other(raw)
+        }
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .queued:       try c.encode("queued")
+        case .started:      try c.encode("started")
+        case .failed:       try c.encode("failed")
+        case .finished:     try c.encode("finished")
+        case .other(let s): try c.encode(s)
+        }
+    }
+}
+
+struct TaskResult: Codable, Equatable {
     let risk_score: Int
     let red_flags: [String]
     let recommendations: [String]
 }
 
-struct TaskReadDTO: Codable {
+// Поле result может быть: объект | строка | null. Делаем сумм-тип.
+enum TaskReadResult: Equatable {
+    case details(TaskResult)
+    case message(String)
+    case none
+}
+
+extension TaskReadResult: Codable {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        // Попробуем объект
+        if let obj = try? c.decode(TaskResult.self) { self = .details(obj); return }
+        // Попробуем строку
+        if let msg = try? c.decode(String.self) { self = .message(msg); return }
+        // Иначе null / неизвестно
+        self = .none
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .details(let d): try c.encode(d)
+        case .message(let s): try c.encode(s)
+        case .none:          try c.encodeNil()
+        }
+    }
+}
+
+struct TaskReadDTO: Codable, Equatable {
     let id: UUID
     let status: TaskStatus
-    let result: TaskResult?
+    let result: TaskReadResult?
     let error: String?
 }
 //
@@ -1387,25 +1462,29 @@ public struct ImageHit: Identifiable, Hashable {
 //
 
 
+
 import Foundation
 
-struct CheaterRecord: Identifiable, Codable {
-    enum Kind: String, Codable { case image, file, text }
-    let id: UUID
-    let date: Date
-    let kind: Kind
-    let riskScore: Int
-    let note: String?                 // делаем опциональным (UI у тебя так использует)
-    let redFlags: [String]
-    let recommendations: [String]
+public struct CheaterRecord: Identifiable, Hashable, Codable {
+    public enum Kind: String, Codable { case image, file, text }
 
-    init(id: UUID = UUID(),
-         date: Date = .init(),
-         kind: Kind,
-         riskScore: Int,
-         note: String?,
-         redFlags: [String],
-         recommendations: [String]) {
+    public let id: UUID
+    public let date: Date
+    public let kind: Kind
+    public let riskScore: Int
+    public let note: String?
+    public let redFlags: [String]
+    public let recommendations: [String]
+
+    public init(
+        id: UUID = UUID(),
+        date: Date = Date(),
+        kind: Kind,
+        riskScore: Int,
+        note: String? = nil,
+        redFlags: [String],
+        recommendations: [String]
+    ) {
         self.id = id
         self.date = date
         self.kind = kind
@@ -1414,6 +1493,10 @@ struct CheaterRecord: Identifiable, Codable {
         self.redFlags = redFlags
         self.recommendations = recommendations
     }
+
+    // Hashable/Equatable — только по id (удобно для навигации/списков)
+    public static func == (lhs: CheaterRecord, rhs: CheaterRecord) -> Bool { lhs.id == rhs.id }
+    public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 //
 //  SettingsView.swift
@@ -2183,7 +2266,6 @@ struct LoadingView: View {
 //  Created by Niiaz Khasanov on 10/29/25.
 //
 
-
 import Foundation
 import Combine
 import UIKit
@@ -2202,6 +2284,9 @@ final class HistoryViewModel: ObservableObject {
     @Published private(set) var rerunResults: [ImageHit] = []
     @Published private(set) var isLoading = false
     @Published var errorText: String?
+
+    // Навигация в экран результата Cheater
+    @Published var selectedCheater: CheaterRecord?   // ← NEW
 
     private let store: HistoryStore
     private let cheaterStore: CheaterStore
@@ -2262,9 +2347,9 @@ final class HistoryViewModel: ObservableObject {
         cheaterItems = []
     }
 
- 
     func onTapCheater(_ rec: CheaterRecord) {
-        // TODO: navigate to CheaterResultView (в следующем шаге)
+        // Навигация в детальный экран результата
+        selectedCheater = rec
     }
 }
 //
@@ -2274,14 +2359,41 @@ final class HistoryViewModel: ObservableObject {
 //  Created by Niiaz Khasanov on 10/29/25.
 //
 
+
 import SwiftUI
 import UIKit
 
 struct HistoryView: View {
-    @StateObject var vm: HistoryViewModel
+    @StateObject private var vm: HistoryViewModel
     @State private var goResults = false
-    
+
+    // важный init для @StateObject, когда VM приходит извне (DI)
+    init(vm: HistoryViewModel) {
+        _vm = StateObject(wrappedValue: vm)
+    }
+
     var body: some View {
+        NavigationStack {
+            content
+                .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+                .navigationBarTitleDisplayMode(.inline)
+                .onAppear { vm.reload() }
+                .onChange(of: vm.rerunResults) { _, hits in
+                    if !hits.isEmpty { goResults = true }
+                }
+        }
+        // навигация должна вешаться на NavigationStack
+        .navigationDestination(isPresented: $goResults) {
+            SearchResultsView(results: vm.rerunResults, mode: .name)
+        }
+        .navigationDestination(item: $vm.selectedCheater) { rec in
+            CheaterResultView(record: rec)
+        }
+    }
+
+    // MARK: - UI
+
+    private var content: some View {
         VStack(spacing: 0) {
             // Title
             HStack {
@@ -2292,12 +2404,12 @@ struct HistoryView: View {
             }
             .padding(.horizontal, Tokens.Spacing.x16)
             .padding(.top, Tokens.Spacing.x16)
-            
+
             // Segment
             SegmentCapsule(selected: $vm.segment)
                 .padding(.horizontal, Tokens.Spacing.x16)
                 .padding(.top, Tokens.Spacing.x12)
-            
+
             // Content
             Group {
                 if vm.segment == .search {
@@ -2316,22 +2428,11 @@ struct HistoryView: View {
                     .padding(.top, Tokens.Spacing.x16)
                 }
             }
-            
+
             Spacer(minLength: 0)
         }
-        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            vm.reload()
-        }
-        .onChange(of: vm.rerunResults) { _, hits in
-            if !hits.isEmpty { goResults = true }
-        }
-        .navigationDestination(isPresented: $goResults) {
-            SearchResultsView(results: vm.rerunResults, mode: .name)
-        }
     }
-    
+
     // small helper
     @ViewBuilder
     private func topBarClear(isHidden: Bool, action: @escaping () -> Void) -> some View {
@@ -2357,7 +2458,7 @@ private struct SegmentCapsule: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Tokens.Color.surfaceCard)
                 .apply(Tokens.Shadow.card)
-            
+
             HStack(spacing: 0) {
                 seg("Search", .search)
                 seg("Cheater", .cheater)
@@ -2365,7 +2466,7 @@ private struct SegmentCapsule: View {
         }
         .frame(height: 44)
     }
-    
+
     private func seg(_ title: String, _ seg: HistoryViewModel.Segment) -> some View {
         Button { selected = seg } label: {
             Text(title)
@@ -2385,22 +2486,24 @@ private struct SegmentCapsule: View {
     }
 }
 
-// MARK: - Search grid (как раньше)
+// MARK: - Search grid
 
 private struct HistoryGrid: View {
     let items: [HistoryRecord]
     let onTap: (HistoryRecord) -> Void
-    
+
     private let columns = [
         GridItem(.flexible(), spacing: Tokens.Spacing.x16),
         GridItem(.flexible(), spacing: Tokens.Spacing.x16)
     ]
-    
+
     var body: some View {
         if items.isEmpty {
-            ContentUnavailableView("No history yet",
-                                   systemImage: "clock.arrow.circlepath",
-                                   description: Text("Your last 10 searches will appear here."))
+            ContentUnavailableView(
+                "No history yet",
+                systemImage: "clock.arrow.circlepath",
+                description: Text("Your last 10 searches will appear here.")
+            )
             .padding(.top, Tokens.Spacing.x24)
         } else {
             ScrollView {
@@ -2440,12 +2543,14 @@ private struct HistoryCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             }
             if let q = rec.query {
-                Text(q).font(Tokens.Font.caption)
+                Text(q)
+                    .font(Tokens.Font.caption)
                     .foregroundStyle(Tokens.Color.textPrimary)
                     .lineLimit(1)
             }
             if let s = rec.sourcePreview {
-                Text(s).font(Tokens.Font.captionRegular)
+                Text(s)
+                    .font(Tokens.Font.captionRegular)
                     .foregroundStyle(Tokens.Color.textSecondary)
                     .lineLimit(1)
             }
@@ -2464,12 +2569,14 @@ private struct HistoryCard: View {
 private struct CheaterList: View {
     let items: [CheaterRecord]
     let onTap: (CheaterRecord) -> Void
-    
+
     var body: some View {
         if items.isEmpty {
-            ContentUnavailableView("No cheater items yet",
-                                   systemImage: "text.magnifyingglass",
-                                   description: Text("Analyze a chat to see it here."))
+            ContentUnavailableView(
+                "No cheater items yet",
+                systemImage: "text.magnifyingglass",
+                description: Text("Analyze a chat to see it here.")
+            )
             .padding(.top, Tokens.Spacing.x24)
         } else {
             ScrollView {
@@ -2489,10 +2596,9 @@ private struct CheaterList: View {
 
 private struct CheaterRow: View {
     let rec: CheaterRecord
-    
+
     var body: some View {
         HStack(spacing: Tokens.Spacing.x12) {
-            // Левая иконка (как в макете)
             ZStack {
                 Tokens.Color.backgroundMain
                 Image(systemName: rec.kind == .file ? "folder" : "photo")
@@ -2501,7 +2607,7 @@ private struct CheaterRow: View {
             }
             .frame(width: 44, height: 44)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text("High risk level")
                     .font(Tokens.Font.caption)
@@ -2513,9 +2619,9 @@ private struct CheaterRow: View {
                         .lineLimit(1)
                 }
             }
-            
+
             Spacer()
-            
+
             Text("\(rec.riskScore)%")
                 .font(Tokens.Font.caption)
                 .foregroundStyle(Tokens.Color.textPrimary)
@@ -2773,6 +2879,108 @@ struct CheaterView: View {
     }
 }
 //
+//  CheaterResultView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+import SwiftUI
+
+struct CheaterResultView: View {
+    let record: CheaterRecord
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Tokens.Spacing.x16) {
+                // Заголовок + процент
+                Text("Risk analysis")
+                    .font(Tokens.Font.title)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+
+                HStack(alignment: .firstTextBaseline, spacing: Tokens.Spacing.x12) {
+                    Text("\(record.riskScore)%")
+                        .font(Tokens.Font.h1)
+                        .foregroundStyle(Tokens.Color.textPrimary)
+                    Text(riskLevelText(record.riskScore))
+                        .font(Tokens.Font.body)
+                        .foregroundStyle(Tokens.Color.textSecondary)
+                }
+
+                if let note = record.note, !note.isEmpty {
+                    Text(note)
+                        .font(Tokens.Font.captionRegular)
+                        .foregroundStyle(Tokens.Color.textSecondary)
+                }
+
+                Divider()
+
+                // Red flags
+                Text("Red flags")
+                    .font(Tokens.Font.subtitle)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+
+                if record.redFlags.isEmpty {
+                    Text("No red flags found.")
+                        .font(Tokens.Font.captionRegular)
+                        .foregroundStyle(Tokens.Color.textSecondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(record.redFlags, id: \.self) { flag in
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("•")
+                                Text(flag)
+                            }
+                            .font(Tokens.Font.body)
+                            .foregroundStyle(Tokens.Color.textPrimary)
+                        }
+                    }
+                }
+
+                Divider()
+
+                // Recommendations
+                Text("Recommendations")
+                    .font(Tokens.Font.subtitle)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+
+                if record.recommendations.isEmpty {
+                    Text("No recommendations.")
+                        .font(Tokens.Font.captionRegular)
+                        .foregroundStyle(Tokens.Color.textSecondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(record.recommendations, id: \.self) { rec in
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("•")
+                                Text(rec)
+                            }
+                            .font(Tokens.Font.body)
+                            .foregroundStyle(Tokens.Color.textPrimary)
+                        }
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.top, Tokens.Spacing.x16)
+        }
+        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+        .navigationTitle("Cheater result")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func riskLevelText(_ score: Int) -> String {
+        switch score {
+        case 0..<34:  return "Low risk level"
+        case 34..<67: return "Medium risk level"
+        default:      return "High risk level"
+        }
+    }
+}
+//
 //  CheaterViewModel.swift
 //  CheaterBuster
 //
@@ -2791,7 +2999,7 @@ final class CheaterViewModel: ObservableObject {
         case idle
         case previewImage(UIImage)
         case previewFile(name: String, data: Data)
-        case uploading(progress: Int)         // 0..100
+        case uploading(progress: Int)
         case result(TaskResult)
         case error(String)
     }
@@ -2819,7 +3027,9 @@ final class CheaterViewModel: ObservableObject {
                 switch state {
                 case .previewImage(let img):
                     guard let data = img.jpegData(compressionQuality: 0.9) else { throw APIError.noData }
-                    try await runTaskForImage(data: data, conversation: conversation)
+                    try await runTask(files: [
+                        .init(name: "files", filename: "image.jpg", mimeType: "image/jpeg", data: data)
+                    ], conversation: conversation, kind: .image)
 
                 case .previewFile(let name, let data):
                     try await runTask(files: [
@@ -2830,50 +3040,49 @@ final class CheaterViewModel: ObservableObject {
                     break
                 }
             } catch {
-                let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                state = .error(msg)
+                state = .error((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
             }
         }
     }
 
     // MARK: - Private
 
-    private func runTaskForImage(data: Data, conversation: String?) async throws {
-        state = .uploading(progress: 5)
-        let file = MultipartFormData.FilePart(name: "files", filename: "image.jpg", mimeType: "image/jpeg", data: data)
-
-        do {
-            try await runTask(files: [file], conversation: conversation, kind: .image)
-        } catch let APIError.http(code, _) where code == 400 || code == 422 {
-            // fallback на /api/task/place (ожидает "file")
-            let created = try await api.createAnalyzePlaceTask(file: file, conversation: conversation)
-            try await handleTaskLifecycle(createdId: created.task_id, kind: .image)
-        }
-    }
-
     private func runTask(files: [MultipartFormData.FilePart], conversation: String?, kind: CheaterRecord.Kind) async throws {
         state = .uploading(progress: 10)
+
+        // По докам POST /api/task возвращает TaskReadDTO с id+status
         let created = try await api.createAnalyzeTask(files: files, conversation: conversation)
-        try await handleTaskLifecycle(createdId: created.task_id, kind: kind)
-    }
+        state = .uploading(progress: 35)
 
-    private func handleTaskLifecycle(createdId: UUID, kind: CheaterRecord.Kind) async throws {
-        state = .uploading(progress: 25)
+        let final: TaskReadDTO
+        switch created.status {
+        case .finished, .failed:
+            final = created
+        default:
+            final = try await poller.waitForAnalyzeResult(taskId: created.id, interval: 1.0)
+        }
 
-        // Всегда поллим по id — бэк возвращает данные задачи через GET
-        state = .uploading(progress: 45)
-        let final = try await poller.waitForAnalyzeResult(taskId: createdId, interval: 1.0)
+        switch final.status {
+        case .finished:
+            if case .details(let r)? = final.result {
+                store.add(.init(date: Date(),
+                                kind: kind,
+                                riskScore: r.risk_score,
+                                note: "AI risk analysis",
+                                redFlags: r.red_flags,
+                                recommendations: r.recommendations))
+                state = .result(r)
+            } else if case .message(let msg)? = final.result {
+                state = .error(msg)
+            } else {
+                state = .error("Empty result")
+            }
 
-        if final.status == .completed, let r = final.result {
-            store.add(.init(date: Date(),
-                            kind: kind,
-                            riskScore: r.risk_score,
-                            note: "AI risk analysis",
-                            redFlags: r.red_flags,
-                            recommendations: r.recommendations))
-            state = .result(r)
-        } else {
-            throw APIError.http(500, final.error ?? "Analysis failed")
+        case .failed:
+            state = .error(final.error ?? "Analysis failed")
+
+        default:
+            state = .error("Unexpected status: \(final.status)")
         }
     }
 
@@ -2881,10 +3090,10 @@ final class CheaterViewModel: ObservableObject {
         let ext = (filename as NSString).pathExtension.lowercased()
         switch ext {
         case "jpg","jpeg": return "image/jpeg"
-        case "png": return "image/png"
-        case "pdf": return "application/pdf"
-        case "txt": return "text/plain"
-        default: return "application/octet-stream"
+        case "png":        return "image/png"
+        case "pdf":        return "application/pdf"
+        case "txt":        return "text/plain"
+        default:           return "application/octet-stream"
         }
     }
 }

@@ -6,25 +6,29 @@
 //
 
 
+
 import Foundation
 
-struct CheaterRecord: Identifiable, Codable {
-    enum Kind: String, Codable { case image, file, text }
-    let id: UUID
-    let date: Date
-    let kind: Kind
-    let riskScore: Int
-    let note: String?                 // делаем опциональным (UI у тебя так использует)
-    let redFlags: [String]
-    let recommendations: [String]
+public struct CheaterRecord: Identifiable, Hashable, Codable {
+    public enum Kind: String, Codable { case image, file, text }
 
-    init(id: UUID = UUID(),
-         date: Date = .init(),
-         kind: Kind,
-         riskScore: Int,
-         note: String?,
-         redFlags: [String],
-         recommendations: [String]) {
+    public let id: UUID
+    public let date: Date
+    public let kind: Kind
+    public let riskScore: Int
+    public let note: String?
+    public let redFlags: [String]
+    public let recommendations: [String]
+
+    public init(
+        id: UUID = UUID(),
+        date: Date = Date(),
+        kind: Kind,
+        riskScore: Int,
+        note: String? = nil,
+        redFlags: [String],
+        recommendations: [String]
+    ) {
         self.id = id
         self.date = date
         self.kind = kind
@@ -33,4 +37,8 @@ struct CheaterRecord: Identifiable, Codable {
         self.redFlags = redFlags
         self.recommendations = recommendations
     }
+
+    // Hashable/Equatable — только по id (удобно для навигации/списков)
+    public static func == (lhs: CheaterRecord, rhs: CheaterRecord) -> Bool { lhs.id == rhs.id }
+    public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
