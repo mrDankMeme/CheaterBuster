@@ -6,24 +6,28 @@
 //
 
 
-
 import Foundation
 import Combine
 
-
+/// Центральный роутер приложения.
+/// Управляет выбранной вкладкой и предпочитаемым состоянием History.
 final class AppRouter: ObservableObject {
     enum Tab: Hashable { case search, cheater, history, settings }
 
-    /// Текущая вкладка.
+    /// Текущая активная вкладка.
     @Published var tab: Tab = .search
 
-    /// Какой сегмент показывать в History при открытии.
-    /// По умолчанию `.search`. Меняем на `.cheater`, когда хотим открыть Cheater-сегмент.
+    /// Предпочтительный сегмент в History (чтобы открывался нужный по умолчанию).
     @Published var historyPreferredSegment: HistoryViewModel.Segment = .search
 
-    /// Удобный helper: переключить на History и сразу выбрать Cheater-сегмент.
+    /// Перейти на History → сразу на Cheater-сегмент.
     func openHistoryCheater() {
         historyPreferredSegment = .cheater
         tab = .history
+    }
+
+    /// Запомнить текущий выбранный сегмент History.
+    func rememberHistorySegment(_ segment: HistoryViewModel.Segment) {
+        historyPreferredSegment = segment
     }
 }

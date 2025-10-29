@@ -13,7 +13,6 @@ struct HistoryView: View {
     @EnvironmentObject private var router: AppRouter
     @State private var goResults = false
 
-    // Важно: init для @StateObject, когда VM приходит из DI
     init(vm: HistoryViewModel) {
         _vm = StateObject(wrappedValue: vm)
     }
@@ -25,7 +24,6 @@ struct HistoryView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .onAppear {
                     vm.reload()
-                    // При входе во вкладку — выставляем нужный сегмент из роутера.
                     vm.segment = router.historyPreferredSegment
                 }
                 .onChange(of: router.historyPreferredSegment) { _, seg in
@@ -34,22 +32,18 @@ struct HistoryView: View {
                 .onChange(of: vm.rerunResults) { _, hits in
                     if !hits.isEmpty { goResults = true }
                 }
-                // Навигация в результаты поиска (реплей)
                 .navigationDestination(isPresented: $goResults) {
                     SearchResultsView(results: vm.rerunResults, mode: .name)
                 }
-                // Навигация в результат Cheater
                 .navigationDestination(item: $vm.selectedCheater) { rec in
                     CheaterResultView(record: rec)
                 }
         }
     }
 
-    // MARK: - UI
-
     private var content: some View {
         VStack(spacing: 0) {
-            // Title
+            // Header
             HStack {
                 Text("History")
                     .font(Tokens.Font.title)
@@ -59,45 +53,40 @@ struct HistoryView: View {
             .padding(.horizontal, Tokens.Spacing.x16)
             .padding(.top, Tokens.Spacing.x16)
 
-            SegmentCapsule(selected: $vm.segment)
+            // ✅ передаём router в SegmentCapsule
+            SegmentCapsule(selected: $vm.segment, router: router)
                 .padding(.horizontal, Tokens.Spacing.x16)
                 .padding(.top, Tokens.Spacing.x12)
 
             Group {
                 if vm.segment == .search {
                     topBarClear(isHidden: vm.items.isEmpty) { vm.clearSearch() }
-                    SearchList(items: vm.items) { rec in
-                        vm.onTapSearch(rec)
-                    }
-                    .padding(.horizontal, Tokens.Spacing.x16)
-                    .padding(.top, Tokens.Spacing.x16)
+                    SearchList(items: vm.items) { rec in vm.onTapSearch(rec) }
+                        .padding(.horizontal, Tokens.Spacing.x16)
+                        .padding(.top, Tokens.Spacing.x16)
                 } else {
                     topBarClear(isHidden: vm.cheaterItems.isEmpty) { vm.clearCheater() }
-                    CheaterList(items: vm.cheaterItems) { rec in
-                        vm.onTapCheater(rec)
-                    }
-                    .padding(.horizontal, Tokens.Spacing.x16)
-                    .padding(.top, Tokens.Spacing.x16)
+                    CheaterList(items: vm.cheaterItems) { rec in vm.onTapCheater(rec) }
+                        .padding(.horizontal, Tokens.Spacing.x16)
+                        .padding(.top, Tokens.Spacing.x16)
                 }
             }
-
             Spacer(minLength: 0)
         }
     }
-
     @ViewBuilder
-    private func topBarClear(isHidden: Bool, action: @escaping () -> Void) -> some View {
-        HStack {
-            Spacer()
-            if !isHidden {
-                Button("Clear") { action() }
-                    .font(Tokens.Font.caption)
-                    .foregroundStyle(Tokens.Color.accent)
-            }
-        }
-        .padding(.horizontal, Tokens.Spacing.x16)
-        .padding(.top, Tokens.Spacing.x8)
-    }
+       private func topBarClear(isHidden: Bool, action: @escaping () -> Void) -> some View {
+           HStack {
+               Spacer()
+               if !isHidden {
+                   Button("Clear") { action() }
+                       .font(Tokens.Font.caption)
+                       .foregroundStyle(Tokens.Color.accent)
+               }
+           }
+           .padding(.horizontal, Tokens.Spacing.x16)
+           .padding(.top, Tokens.Spacing.x8)
+       }
 }
 
 
@@ -284,6 +273,8 @@ private extension DateFormatter {
 
 private struct SegmentCapsule: View {
     @Binding var selected: HistoryViewModel.Segment
+    @ObservedObject var router: AppRouter
+
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -299,7 +290,10 @@ private struct SegmentCapsule: View {
     }
 
     private func seg(_ title: String, _ seg: HistoryViewModel.Segment) -> some View {
-        Button { selected = seg } label: {
+        Button {
+            selected = seg
+            router.rememberHistorySegment(seg) // ✅ запоминаем выбор
+        } label: {
             Text(title)
                 .font(Tokens.Font.caption)
                 .foregroundStyle(selected == seg ? .white : Tokens.Color.textPrimary)
