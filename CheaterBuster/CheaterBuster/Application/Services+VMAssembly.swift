@@ -5,6 +5,13 @@
 //  Created by Niiaz Khasanov on 10/28/25.
 //
 
+//
+//  Services+VMAssembly.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
 import Foundation
 import Swinject
 
@@ -53,7 +60,7 @@ final class ServicesAssembly: Assembly {
         }
         .inObjectScope(.container)
 
-        // MARK: Domain Stores & Services
+        // MARK: Domain Stores
         container.register(HistoryStore.self) { _ in HistoryStoreImpl() }
             .inObjectScope(.container)
 
@@ -63,8 +70,20 @@ final class ServicesAssembly: Assembly {
         container.register(SettingsStore.self) { _ in SettingsStoreImpl() }
             .inObjectScope(.container)
 
-        container.register(SearchService.self) { _ in SearchServiceImpl() }
-            .inObjectScope(.container)
+        // MARK: Domain / Search Repository (НОВОЕ)
+        container.register(SearchRepository.self) { r in
+            SearchRepositoryImpl(api: r.resolve(CheaterAPI.self)!)
+        }
+        .inObjectScope(.container)
+
+        // MARK: Services
+        container.register(SearchService.self) { r in
+            SearchServiceImpl(
+                repo: r.resolve(SearchRepository.self)!,
+                poller: r.resolve(TaskPoller.self)!
+            )
+        }
+        .inObjectScope(.container)
 
         container.register(CheaterAnalyzerService.self) { _ in CheaterAnalyzerServiceImpl() }
             .inObjectScope(.container)

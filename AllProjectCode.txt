@@ -522,14 +522,39 @@ struct CheaterBusterApp: App {
 //  Created by Niiaz Khasanov on 10/29/25.
 //
 
+
 import Foundation
 import Combine
 
-/// Простой роутер уровня приложения: выбранная вкладка.
+/// Центральный роутер приложения.
+/// Управляет выбранной вкладкой и предпочитаемым состоянием History.
 final class AppRouter: ObservableObject {
     enum Tab: Hashable { case search, cheater, history, settings }
+
+    /// Текущая активная вкладка.
     @Published var tab: Tab = .search
+
+    /// Предпочтительный сегмент в History (чтобы открывался нужный по умолчанию).
+    @Published var historyPreferredSegment: HistoryViewModel.Segment = .search
+
+    /// Перейти на History → сразу на Cheater-сегмент.
+    func openHistoryCheater() {
+        historyPreferredSegment = .cheater
+        tab = .history
+    }
+
+    /// Запомнить текущий выбранный сегмент History.
+    func rememberHistorySegment(_ segment: HistoryViewModel.Segment) {
+        historyPreferredSegment = segment
+    }
 }
+//
+//  Services+VMAssembly.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
 //
 //  Services+VMAssembly.swift
 //  CheaterBuster
@@ -585,7 +610,7 @@ final class ServicesAssembly: Assembly {
         }
         .inObjectScope(.container)
 
-        // MARK: Domain Stores & Services
+        // MARK: Domain Stores
         container.register(HistoryStore.self) { _ in HistoryStoreImpl() }
             .inObjectScope(.container)
 
@@ -595,8 +620,20 @@ final class ServicesAssembly: Assembly {
         container.register(SettingsStore.self) { _ in SettingsStoreImpl() }
             .inObjectScope(.container)
 
-        container.register(SearchService.self) { _ in SearchServiceImpl() }
-            .inObjectScope(.container)
+        // MARK: Domain / Search Repository (НОВОЕ)
+        container.register(SearchRepository.self) { r in
+            SearchRepositoryImpl(api: r.resolve(CheaterAPI.self)!)
+        }
+        .inObjectScope(.container)
+
+        // MARK: Services
+        container.register(SearchService.self) { r in
+            SearchServiceImpl(
+                repo: r.resolve(SearchRepository.self)!,
+                poller: r.resolve(TaskPoller.self)!
+            )
+        }
+        .inObjectScope(.container)
 
         container.register(CheaterAnalyzerService.self) { _ in CheaterAnalyzerServiceImpl() }
             .inObjectScope(.container)
@@ -661,6 +698,39 @@ struct RootTabView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(AppRouter.Tab.settings)
         }
+    }
+}
+//
+//  SearchRepositoryImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+import Foundation
+
+/// Реализация SearchRepository через CheaterAPI.
+final class SearchRepositoryImpl: SearchRepository {
+    private let api: CheaterAPI
+
+    init(api: CheaterAPI) {
+        self.api = api
+    }
+
+    func createReverseSearch(image: Data, filename: String, mimeType: String) async throws -> UUID {
+        let part = MultipartFormData.FilePart(
+            name: "image",
+            filename: filename,
+            mimeType: mimeType,
+            data: image
+        )
+        let created = try await api.createReverseSearch(image: part) // ReverseSearchCreateResponse
+        return created.task_id
+    }
+
+    func getReverseSearch(taskId: UUID) async throws -> ReverseSearchGetResponse {
+        try await api.getReverseSearch(id: taskId)
     }
 }
 //
@@ -898,40 +968,80 @@ final class CheaterStoreImpl: CheaterStore {
 import Foundation
 import Combine
 
+
+/// Высокоуровневый сервис поиска.
+/// Работает через SearchRepository (низкий уровень) и TaskPoller (поллинг).
 final class SearchServiceImpl: SearchService {
-    func searchByName(_ query: String) -> AnyPublisher<[ImageHit],Error> {
+    private let repo: SearchRepository
+    private let poller: TaskPoller
+
+    init(repo: SearchRepository, poller: TaskPoller) {
+        self.repo = repo
+        self.poller = poller
+    }
+
+    // Поиск по имени — пока мок (E9-2 подключим реальный API при необходимости).
+    func searchByName(_ query: String) -> AnyPublisher<[ImageHit], Error> {
         Just(query)
             .delay(for: .milliseconds(300), scheduler: DispatchQueue.main)
-            .map { q in
-                guard !q.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
-                return (0..<3).map { i in
+            .tryMap { q in
+                let trimmed = q.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return [] }
+                return (0..<6).map { i in
                     ImageHit(
-                        title: "Result \(i+1) for '\(q)'",
+                        title: "Result \(i+1) for '\(trimmed)'",
                         source: "example.com",
-                        thumbnailURL: URL(string: "https://picsum.photos/seed/\(q)\(i)/200/200") ,
+                        thumbnailURL: URL(string: "https://picsum.photos/seed/\(trimmed)\(i)/400/300"),
                         linkURL: URL(string: "https://example.com/\(i)")
                     )
                 }
             }
-            .setFailureType(to: Error.self)
             .eraseToAnyPublisher()
     }
-    
-    func searchByImage(_ jpegData: Data) -> AnyPublisher<[ImageHit],Error> {
-        Just((0..<3).map { i in
-                  ImageHit(
-                      title: "Similar \(i+1)",
-                      source: "lens.example",
-                      thumbnailURL: URL(string: "https://picsum.photos/seed/image\(i)/200/200"),
-                      linkURL: URL(string: "https://example.com/vis\(i)")
-                  )
-              })
-        .delay(for: .milliseconds(300), scheduler: DispatchQueue.main)
-        .setFailureType(to: Error.self)
+
+    // Реальный reverse image search по фото.
+    func searchByImage(_ jpegData: Data) -> AnyPublisher<[ImageHit], Error> {
+        Future { [repo, poller] promise in
+            Task {
+                do {
+                    // 1) создать задачу
+                    let taskId = try await repo.createReverseSearch(
+                        image: jpegData,
+                        filename: "image.jpg",
+                        mimeType: "image/jpeg"
+                    )
+
+                    // 2) дождаться готовности всех провайдеров (google/yandex/bing)
+                    let resp = try await poller.waitForReverseResult(taskId: taskId, interval: 1.0)
+
+                    // 3) маппинг в UI-модель
+                    let hits = Self.mapReverseResponseToHits(resp)
+                    promise(.success(hits))
+                } catch {
+                    promise(.failure(error))
+                }
+            }
+        }
         .eraseToAnyPublisher()
     }
-    
-    
+
+    // MARK: - Mapping
+
+    private static func mapReverseResponseToHits(_ resp: ReverseSearchGetResponse) -> [ImageHit] {
+        // Берём google.visual_matches; при желании можно объединить с yandex/bing.
+        guard let g = resp.results.google,
+              let matches = g.visual_matches, !matches.isEmpty
+        else { return [] }
+
+        return matches.compactMap { vm in
+            ImageHit(
+                title: vm.title,
+                source: vm.source,
+                thumbnailURL: vm.thumbnail.flatMap(URL.init(string:)),
+                linkURL: URL(string: vm.link)
+            )
+        }
+    }
 }
 //
 //  CheaterAPIImpl.swift
@@ -1046,6 +1156,27 @@ final class CheaterAPIImpl: CheaterAPI {
         authed(&req)
         return try await http.send(req)
     }
+}
+//
+//  SearchRepository.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+
+
+import Foundation
+
+/// Низкоуровневый доступ к reverse image search API.
+/// Репозиторий ничего не знает о Combine/SwiftUI и не занимается поллингом.
+protocol SearchRepository {
+    /// Создать задачу reverse-search и вернуть её id.
+    func createReverseSearch(image: Data, filename: String, mimeType: String) async throws -> UUID
+
+    /// Получить состояние/результат по taskId.
+    func getReverseSearch(taskId: UUID) async throws -> ReverseSearchGetResponse
 }
 //
 //  TaskPoller.swift
@@ -2299,6 +2430,8 @@ struct LoadingView: View {
 //  Created by Niiaz Khasanov on 10/29/25.
 //
 
+
+
 import Foundation
 import Combine
 import UIKit
@@ -2328,16 +2461,7 @@ final class HistoryViewModel: ObservableObject {
         self.store = store
         self.cheaterStore = cheaterStore
         self.search = search
-
         reload()
-
-        // 🧭 React to "openHistoryCheater" notification.
-        NotificationCenter.default.publisher(for: .openHistoryCheater)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.segment = .cheater
-            }
-            .store(in: &bag)
     }
 
     func reload() {
@@ -2398,9 +2522,9 @@ import UIKit
 
 struct HistoryView: View {
     @StateObject private var vm: HistoryViewModel
+    @EnvironmentObject private var router: AppRouter
     @State private var goResults = false
 
-    // Важно: init для @StateObject, когда VM приходит из DI
     init(vm: HistoryViewModel) {
         _vm = StateObject(wrappedValue: vm)
     }
@@ -2410,26 +2534,28 @@ struct HistoryView: View {
             content
                 .background(Tokens.Color.backgroundMain.ignoresSafeArea())
                 .navigationBarTitleDisplayMode(.inline)
-                .onAppear { vm.reload() }
+                .onAppear {
+                    vm.reload()
+                    vm.segment = router.historyPreferredSegment
+                }
+                .onChange(of: router.historyPreferredSegment) { _, seg in
+                    vm.segment = seg
+                }
                 .onChange(of: vm.rerunResults) { _, hits in
                     if !hits.isEmpty { goResults = true }
                 }
-                // Навигация в результаты поиска (реплей)
                 .navigationDestination(isPresented: $goResults) {
                     SearchResultsView(results: vm.rerunResults, mode: .name)
                 }
-                // Навигация в результат Cheater
                 .navigationDestination(item: $vm.selectedCheater) { rec in
                     CheaterResultView(record: rec)
                 }
         }
     }
 
-    // MARK: - UI
-
     private var content: some View {
         VStack(spacing: 0) {
-            // Title
+            // Header
             HStack {
                 Text("History")
                     .font(Tokens.Font.title)
@@ -2439,32 +2565,42 @@ struct HistoryView: View {
             .padding(.horizontal, Tokens.Spacing.x16)
             .padding(.top, Tokens.Spacing.x16)
 
-            // Твой компонент сегмента — оставляю имя, которое у тебя в проекте
-            SegmentCapsule(selected: $vm.segment)
+            // ✅ передаём router в SegmentCapsule
+            SegmentCapsule(selected: $vm.segment, router: router)
                 .padding(.horizontal, Tokens.Spacing.x16)
                 .padding(.top, Tokens.Spacing.x12)
 
             Group {
                 if vm.segment == .search {
                     topBarClear(isHidden: vm.items.isEmpty) { vm.clearSearch() }
-                    SearchList(items: vm.items) { rec in
-                        vm.onTapSearch(rec)
-                    }
-                    .padding(.horizontal, Tokens.Spacing.x16)
-                    .padding(.top, Tokens.Spacing.x16)
+                    SearchList(items: vm.items) { rec in vm.onTapSearch(rec) }
+                        .padding(.horizontal, Tokens.Spacing.x16)
+                        .padding(.top, Tokens.Spacing.x16)
                 } else {
                     topBarClear(isHidden: vm.cheaterItems.isEmpty) { vm.clearCheater() }
-                    CheaterList(items: vm.cheaterItems) { rec in
-                        vm.onTapCheater(rec)
-                    }
-                    .padding(.horizontal, Tokens.Spacing.x16)
-                    .padding(.top, Tokens.Spacing.x16)
+                    CheaterList(items: vm.cheaterItems) { rec in vm.onTapCheater(rec) }
+                        .padding(.horizontal, Tokens.Spacing.x16)
+                        .padding(.top, Tokens.Spacing.x16)
                 }
             }
-
             Spacer(minLength: 0)
         }
     }
+    @ViewBuilder
+       private func topBarClear(isHidden: Bool, action: @escaping () -> Void) -> some View {
+           HStack {
+               Spacer()
+               if !isHidden {
+                   Button("Clear") { action() }
+                       .font(Tokens.Font.caption)
+                       .foregroundStyle(Tokens.Color.accent)
+               }
+           }
+           .padding(.horizontal, Tokens.Spacing.x16)
+           .padding(.top, Tokens.Spacing.x8)
+       }
+}
+
 
     @ViewBuilder
     private func topBarClear(isHidden: Bool, action: @escaping () -> Void) -> some View {
@@ -2479,7 +2615,7 @@ struct HistoryView: View {
         .padding(.horizontal, Tokens.Spacing.x16)
         .padding(.top, Tokens.Spacing.x8)
     }
-}
+
 
 // MARK: - Search list (исправлено под HistoryRecord)
 
@@ -2649,6 +2785,8 @@ private extension DateFormatter {
 
 private struct SegmentCapsule: View {
     @Binding var selected: HistoryViewModel.Segment
+    @ObservedObject var router: AppRouter
+
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -2664,7 +2802,10 @@ private struct SegmentCapsule: View {
     }
 
     private func seg(_ title: String, _ seg: HistoryViewModel.Segment) -> some View {
-        Button { selected = seg } label: {
+        Button {
+            selected = seg
+            router.rememberHistorySegment(seg) // ✅ запоминаем выбор
+        } label: {
             Text(title)
                 .font(Tokens.Font.caption)
                 .foregroundStyle(selected == seg ? .white : Tokens.Color.textPrimary)
@@ -2687,6 +2828,8 @@ private struct SegmentCapsule: View {
 //
 //  Created by Niiaz Khasanov on 10/28/25.
 //
+
+
 
 import SwiftUI
 import PhotosUI
@@ -2769,8 +2912,8 @@ struct CheaterView: View {
         }
         .alert("Saved to History", isPresented: $showSavedAlert) {
             Button("Open History") {
-                router.tab = .history
-                NotificationCenter.default.post(name: .openHistoryCheater, object: nil)
+                // Детеминированная навигация через роутер:
+                router.openHistoryCheater()
             }
             Button("OK", role: .cancel) { }
         }
@@ -2796,7 +2939,7 @@ struct CheaterView: View {
         }
     }
 
-    // MARK: - Subviews
+    // MARK: - Subviews (без изменений ниже)
 
     private var idleView: some View {
         VStack(spacing: Tokens.Spacing.x24) {
@@ -2934,8 +3077,6 @@ struct CheaterView: View {
             Spacer(minLength: 0)
         }
     }
-
-    // MARK: - Helpers
 
     private func riskLevelText(_ score: Int) -> String {
         switch score {
