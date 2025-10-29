@@ -6,36 +6,31 @@
 //
 
 
-
 import Foundation
-import UIKit
 
-public enum CheaterSourceKind: String, Codable {
-    case image   // анализ скриншота/фото
-    case file    // анализ документа/файла
-}
+struct CheaterRecord: Identifiable, Codable {
+    enum Kind: String, Codable { case image, file, text }
+    let id: UUID
+    let date: Date
+    let kind: Kind
+    let riskScore: Int
+    let note: String?                 // делаем опциональным (UI у тебя так использует)
+    let redFlags: [String]
+    let recommendations: [String]
 
-public struct CheaterRecord: Identifiable, Codable {
-    public let id: UUID
-    public let createdAt: Date
-    public let kind: CheaterSourceKind
-    public let riskScore: Int            // 0...100
-    public let previewJPEG: Data?        // маленькая превьюшка (опц.)
-
-    // опционально — краткий заголовок/примечание
-    public let note: String?
-
-    public init(id: UUID = UUID(),
-                createdAt: Date = .init(),
-                kind: CheaterSourceKind,
-                riskScore: Int,
-                previewJPEG: Data? = nil,
-                note: String? = nil) {
+    init(id: UUID = UUID(),
+         date: Date = .init(),
+         kind: Kind,
+         riskScore: Int,
+         note: String?,
+         redFlags: [String],
+         recommendations: [String]) {
         self.id = id
-        self.createdAt = createdAt
+        self.date = date
         self.kind = kind
-        self.riskScore = max(0, min(100, riskScore))
-        self.previewJPEG = previewJPEG
+        self.riskScore = riskScore
         self.note = note
+        self.redFlags = redFlags
+        self.recommendations = recommendations
     }
 }

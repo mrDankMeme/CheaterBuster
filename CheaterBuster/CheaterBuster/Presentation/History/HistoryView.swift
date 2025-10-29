@@ -2,8 +2,11 @@
 //  HistoryView.swift
 //  CheaterBuster
 //
+//  Created by Niiaz Khasanov on 10/29/25.
+//
 
 import SwiftUI
+import UIKit
 
 struct HistoryView: View {
     @StateObject var vm: HistoryViewModel

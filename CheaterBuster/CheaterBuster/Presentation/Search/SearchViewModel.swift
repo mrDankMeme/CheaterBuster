@@ -5,10 +5,6 @@
 //  Created by Niiaz Khasanov on 10/28/25.
 //
 
-//
-//  SearchViewModel.swift
-//  CheaterBuster
-//
 
 import Foundation
 import Combine

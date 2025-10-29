@@ -6,6 +6,7 @@
 //
 
 
+
 import SwiftUI
 import Swinject
 
@@ -14,14 +15,15 @@ struct RootTabView: View {
 
     var body: some View {
         TabView {
-            
             SearchScreen(vm: resolver.resolve(SearchViewModel.self)!)
                 .tabItem { Label("Search", systemImage: "magnifyingglass") }
 
-            CheaterScreen()  // временно без VM
+            // Был CheaterScreen(), но реальный тип — CheaterView
+            CheaterView(vm: resolver.resolve(CheaterViewModel.self)!)
                 .tabItem { Label("Cheater", systemImage: "person.crop.circle.badge.exclamationmark") }
 
             HistoryView(vm: resolver.resolve(HistoryViewModel.self)!)
+                .tabItem { Label("History", systemImage: "clock") }
 
             SettingsScreen()
                 .tabItem { Label("Settings", systemImage: "gearshape") }

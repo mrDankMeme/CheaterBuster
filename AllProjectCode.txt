@@ -1,0 +1,2890 @@
+//
+//  InMemoryTokenStorage.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+import Foundation
+
+final class InMemoryTokenStorage: TokenStorage {
+    var accessToken: String?
+    var userId: String?
+}
+
+//
+//  MultipartFormData.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+// сборщик multipart-запросов
+
+import Foundation
+
+struct MultipartFormData {
+    struct FilePart {
+        let name: String
+        let filename: String
+        let mimeType: String
+        let data: Data
+    }
+    
+    private let boundary = "----CB-\(UUID().uuidString)"
+    var contentType: String { "multipart/form-data; boundary=\(boundary)" }
+    
+    func build(fields: [String: String?], files: [FilePart]) -> Data {
+        var body = Data()
+        for (k,v) in fields { guard let v else { continue }
+            body.append("--\(boundary)\r\n")
+            body.append("Content-Disposition: form-data; name=\"\(k)\"\r\n\r\n")
+            body.append("\(v)\r\n")
+        }
+        for f in files {
+            body.append("--\(boundary)\r\n")
+            body.append("Content-Disposition: form-data; name=\"\(f.name)\"; filename=\"\(f.filename)\"\r\n")
+            body.append("Content-Type: \(f.mimeType)\r\n\r\n")
+            body.append(f.data); body.append("\r\n")
+        }
+        body.append("--\(boundary)--\r\n")
+        return body
+    }
+}
+private extension Data {
+    mutating func append(_ s: String) {
+        if let d = s.data(using: .utf8) {
+            append(d)
+        }
+    }
+}
+//
+//  URLSessionHTTPClient.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+
+import Foundation
+
+final class URLSessionHTTPClient: HTTPClient {
+    private let session: URLSession
+    init(session: URLSession = .shared) { self.session = session }
+
+    func send<T: Decodable>(_ request: URLRequest) async throws -> T {
+        var req = request
+        if req.value(forHTTPHeaderField: "Accept") == nil {
+            req.setValue("application/json", forHTTPHeaderField: "Accept")
+        }
+        let (data, resp): (Data, URLResponse)
+        do {
+            (data, resp) = try await session.data(for: req)
+        } catch {
+            throw APIError.transport(error)
+        }
+        guard let http = resp as? HTTPURLResponse else { throw APIError.noData }
+        guard (200..<300).contains(http.statusCode) else {
+            if http.statusCode == 401 { throw APIError.unauthorized }
+            let body = String(data: data, encoding: .utf8)
+            throw APIError.http(http.statusCode, body)
+        }
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            throw APIError.decoding(error)
+        }
+    }
+
+    func sendVoid(_ request: URLRequest) async throws {
+        var req = request
+        if req.value(forHTTPHeaderField: "Accept") == nil {
+            req.setValue("application/json", forHTTPHeaderField: "Accept")
+        }
+        let (data, resp) = try await session.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw APIError.noData }
+        guard (200..<300).contains(http.statusCode) else {
+            if http.statusCode == 401 { throw APIError.unauthorized }
+            let body = String(data: data, encoding: .utf8)
+            throw APIError.http(http.statusCode, body)
+        }
+        _ = data
+    }
+}
+//
+//  APIConfig.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+import Foundation
+
+struct APIConfig {
+    let baseURL: URL
+    let bundleId: String = Bundle.main.bundleIdentifier ?? "dev.cheaterbuster"
+}
+//
+//  ContentView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/27/25.
+//
+
+
+import SwiftUI
+import Swinject
+
+struct DemoView: View {
+    @State private var query = ""
+    @Environment(\.resolver) private var resolver
+    var body: some View {
+        NavigationStack {
+            Text("Boot OK")
+            Text("Resolver hash: \(ObjectIdentifier(resolver as AnyObject).hashValue)")
+
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            VStack(spacing: Tokens.Spacing.x24) {
+                SearchField("Partner's name...", text: $query)
+
+                PrimaryButton("Find", isDisabled: query.isEmpty) {
+                    // позже добавим действие
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.top, Tokens.Spacing.x24)
+            .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+            .navigationTitle("CheaterBuster")
+        }
+    }
+}
+
+//
+//  PrimaryButton.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/27/25.
+//
+
+import SwiftUI
+
+public struct PrimaryButton: View {
+    public enum Size { case large, medium }
+
+    let title: String
+    let size: Size
+    let isLoading: Bool
+    let isDisabled: Bool
+    let action: () -> Void
+
+    public init(_ title: String,
+                size: Size = .large,
+                isLoading: Bool = false,
+                isDisabled: Bool = false,
+                action: @escaping () -> Void) {
+        self.title = title
+        self.size = size
+        self.isLoading = isLoading
+        self.isDisabled = isDisabled
+        self.action = action
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            ZStack {
+                if isLoading {
+                    ProgressView().tint(.white)
+                } else {
+                    Text(title)
+                        .font(Tokens.Font.subtitle)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, size == .large ? 16 : 12)
+            // iOS-style corner smoothing (.continuous)
+            .background(
+                (isDisabled ? Tokens.Color.accentPressed : Tokens.Color.accent),
+                in: RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled || isLoading)
+        .accessibilityAddTraits(.isButton)
+    }
+}
+//
+//  SearchField.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/27/25.
+//
+
+import SwiftUI
+
+public struct SearchField: View {
+    @Binding var text: String
+    var placeholder: String
+    var onCommit: (() -> Void)?
+    var onCancel: (() -> Void)?
+
+    @FocusState private var focused: Bool
+
+    public init(_ placeholder: String,
+                text: Binding<String>,
+                onCommit: (() -> Void)? = nil,
+                onCancel: (() -> Void)? = nil) {
+        self.placeholder = placeholder
+        self._text = text
+        self.onCommit = onCommit
+        self.onCancel = onCancel
+    }
+
+    public var body: some View {
+        HStack(spacing: Tokens.Spacing.x12) {
+            HStack(spacing: Tokens.Spacing.x12) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(Tokens.Color.textSecondary)
+
+                TextField(placeholder, text: $text)
+                    .font(Tokens.Font.body)
+                    .foregroundColor(Tokens.Color.textPrimary)
+                    .focused($focused)
+                    .submitLabel(.search)
+                    .onSubmit { onCommit?() }
+
+                if !text.isEmpty {
+                    Button {
+                        text = ""
+                    } label: {
+                        Image(systemName: "xmark")
+                            .foregroundColor(Tokens.Color.textSecondary)
+                    }
+                    .accessibilityLabel("Clear text")
+                }
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.vertical, 12)
+            .background(
+                Tokens.Color.surfaceCard,
+                in: RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
+                    .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+            )
+            .apply(Tokens.Shadow.card)
+
+            if focused {
+                Button("Cancel") {
+                    text = ""
+                    focused = false
+                    onCancel?()
+                }
+                .font(Tokens.Font.body)
+                .foregroundColor(Tokens.Color.textSecondary)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: focused)
+    }
+}
+//
+//  DesignTokens.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/27/25.
+//
+
+import SwiftUI
+
+public enum Tokens {
+    
+    // MARK: Colors (Figma -> SwiftUI)
+    public enum Color {
+        public static let accent = SwiftUI.Color("Accent")
+        public static let accentPressed = SwiftUI.Color("AccentPressed")
+        
+        public static let textPrimary = SwiftUI.Color("TextPrimary")
+        public static let textSecondary = SwiftUI.Color("TextSecondary")
+        
+        public static let borderNeutral = SwiftUI.Color("BorderNeutral")
+        
+        public static let backgroundMain = SwiftUI.Color("BackgroundMain")
+        public static let surfaceCard = SwiftUI.Color("SurfaceCard")
+    }
+    
+    //MARK: Typography (SF Pro)
+    public enum Font {
+        public static let h1 = SwiftUI.Font.system(size:32, weight: .semibold)
+        public static let h2 = SwiftUI.Font.system(size:28, weight: .medium)
+        public static let title = SwiftUI.Font.system(size:22, weight: .medium)
+        public static let subtitle = SwiftUI.Font.system(size:20, weight: .bold)
+        public static let body = SwiftUI.Font.system(size:20, weight: .regular)
+        public static let bodyMedium18 = SwiftUI.Font.system(size:18, weight: .medium)
+        static let bodyMedium = SwiftUI.Font.system(size: 16, weight: .medium)
+        public static let caption = SwiftUI.Font.system(size: 15, weight: .medium)
+        public static let captionRegular = SwiftUI.Font.system(size: 15, weight: .regular)
+    }
+    
+    //MARK: Spacing & Radius
+    
+    public enum Spacing {
+        public static let x4:  CGFloat = 4
+        public static let x8:  CGFloat = 8
+        public static let x12: CGFloat = 12
+        public static let x16: CGFloat = 16
+        public static let x20: CGFloat = 20
+        public static let x24: CGFloat = 24
+        public static let x32: CGFloat = 32
+    }
+    
+    public enum Radius {
+        public static let pill:   CGFloat = 24
+        public static let medium: CGFloat = 16
+        public static let small:  CGFloat = 12
+    }
+    
+    // MARK: Shadow
+    public enum Shadow {
+        public static let card = ShadowStyle(
+            color: .black.opacity(0.07),
+            radius: 12,
+            y: 6
+        )
+    }
+    
+}
+
+// MARK: Helpers
+public struct ShadowStyle {
+    public let color: Color
+    public let radius: CGFloat
+    public let y: CGFloat
+}
+
+public extension View {
+    func apply(_ shadow: ShadowStyle) -> some View {
+        self.shadow(color: shadow.color, radius: shadow.radius, x: 0, y: shadow.y)
+    }
+}
+//
+//  Corner+Helpers.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import SwiftUI
+
+public extension View {
+    @inlinable
+    func cornerRadiusContinuous(_ r: CGFloat) -> some View {
+        clipShape(RoundedRectangle(cornerRadius: r, style: .continuous))
+    }
+
+    @inlinable
+    func roundedBorder(_ color: Color, lineWidth: CGFloat, radius: CGFloat) -> some View {
+        overlay(
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .stroke(color, lineWidth: lineWidth)
+        )
+    }
+}
+//
+//  Environment+Resolver.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import SwiftUI
+import Swinject
+
+private struct ResolverKey: EnvironmentKey {
+    static let defaultValue: Resolver = Assembler([]).resolver
+}
+
+extension EnvironmentValues {
+    var resolver: Resolver {
+        get { self[ResolverKey.self]}
+        set { self[ResolverKey.self] = newValue }
+    }
+}
+//
+//  DevSeed.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import Foundation
+import Swinject
+
+enum DevSeed {
+    static func run(_ resolver: Resolver) {
+        #if DEBUG
+        guard let store = resolver.resolve(CheaterStore.self) else { return }
+        if store.load().isEmpty {
+            store.add(.init(
+                kind: .image,
+                riskScore: 80,
+                note: "WhatsApp screenshot",
+                redFlags: [],
+                recommendations: []
+            ))
+            store.add(.init(
+                kind: .file,
+                riskScore: 92,
+                note: "PDF contract",
+                redFlags: [],
+                recommendations: []
+            ))
+        }
+        #endif
+    }
+}
+//
+//  AppAssembler.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import Swinject
+
+enum AppAssembler {
+    static func make() -> Assembler {
+        Assembler([
+            ServicesAssembly()
+        ])
+    }
+}
+//
+//  CheaterBusterApp.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/27/25.
+//
+
+import SwiftUI
+import Swinject
+
+@main
+struct CheaterBusterApp: App {
+
+    private let assembler = AppAssembler.make()
+    private var resolver: Resolver { assembler.resolver }
+
+    init() {
+        DevSeed.run(resolver)
+    }
+
+    var body: some Scene {
+        WindowGroup {
+            RootTabView()
+                .environment(\.resolver, resolver)
+        }
+    }
+}
+//
+//  Services+VMAssembly.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import Foundation
+import Swinject
+
+final class ServicesAssembly: Assembly {
+    func assemble(container: Container) {
+
+        // MARK: Infrastructure
+        container.register(APIConfig.self) { _ in
+            // Подставь свой prod/dev URL
+            APIConfig(baseURL: URL(string: "https://cheaterbuster.webberapp.shop")!)
+        }
+        .inObjectScope(.container)
+
+        container.register(TokenStorage.self) { _ in
+            InMemoryTokenStorage()
+        }
+        .inObjectScope(.container)
+
+        container.register(HTTPClient.self) { _ in
+            URLSessionHTTPClient()
+        }
+        .inObjectScope(.container)
+
+        // MARK: Domain / Auth
+        container.register(AuthRepository.self) { r in
+            AuthRepositoryImpl(
+                cfg: r.resolve(APIConfig.self)!,
+                http: r.resolve(HTTPClient.self)!,
+                tokens: r.resolve(TokenStorage.self)!
+            )
+        }
+        .inObjectScope(.container)
+
+        // MARK: Domain / API
+        container.register(CheaterAPI.self) { r in
+            CheaterAPIImpl(
+                cfg: r.resolve(APIConfig.self)!,
+                http: r.resolve(HTTPClient.self)!,
+                tokens: r.resolve(TokenStorage.self)!
+            )
+        }
+        .inObjectScope(.container)
+
+        // MARK: Domain / Tasks
+        container.register(TaskPoller.self) { r in
+            TaskPollerImpl(api: r.resolve(CheaterAPI.self)!)
+        }
+        .inObjectScope(.container)
+
+        // MARK: Domain Stores & Services
+        container.register(HistoryStore.self) { _ in HistoryStoreImpl() }
+            .inObjectScope(.container)
+
+        container.register(CheaterStore.self) { _ in CheaterStoreImpl() }
+            .inObjectScope(.container)
+
+        container.register(SettingsStore.self) { _ in SettingsStoreImpl() }
+            .inObjectScope(.container)
+
+        container.register(SearchService.self) { _ in SearchServiceImpl() }
+            .inObjectScope(.container)
+
+        container.register(CheaterAnalyzerService.self) { _ in CheaterAnalyzerServiceImpl() }
+            .inObjectScope(.container)
+
+        // MARK: ViewModels
+        container.register(SearchViewModel.self) { r in
+            SearchViewModel(
+                search: r.resolve(SearchService.self)!,
+                history: r.resolve(HistoryStore.self)!,
+                settings: r.resolve(SettingsStore.self)!
+            )
+        }
+
+        container.register(HistoryViewModel.self) { r in
+            HistoryViewModel(
+                store: r.resolve(HistoryStore.self)!,
+                cheaterStore: r.resolve(CheaterStore.self)!,
+                search: r.resolve(SearchService.self)!
+            )
+        }
+
+        container.register(CheaterViewModel.self) { r in
+            CheaterViewModel(
+                auth: r.resolve(AuthRepository.self)!,
+                api: r.resolve(CheaterAPI.self)!,
+                poller: r.resolve(TaskPoller.self)!,
+                store: r.resolve(CheaterStore.self)!,
+                cfg: r.resolve(APIConfig.self)!
+            )
+        }
+    }
+}
+//
+//  RootTabView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+
+import SwiftUI
+import Swinject
+
+struct RootTabView: View {
+    @Environment(\.resolver) private var resolver
+
+    var body: some View {
+        TabView {
+            SearchScreen(vm: resolver.resolve(SearchViewModel.self)!)
+                .tabItem { Label("Search", systemImage: "magnifyingglass") }
+
+            // Был CheaterScreen(), но реальный тип — CheaterView
+            CheaterView(vm: resolver.resolve(CheaterViewModel.self)!)
+                .tabItem { Label("Cheater", systemImage: "person.crop.circle.badge.exclamationmark") }
+
+            HistoryView(vm: resolver.resolve(HistoryViewModel.self)!)
+                .tabItem { Label("History", systemImage: "clock") }
+
+            SettingsScreen()
+                .tabItem { Label("Settings", systemImage: "gearshape") }
+        }
+    }
+}
+//
+//  SettingsStoreImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+import Foundation
+
+final class SettingsStoreImpl: SettingsStore {
+    private let key = "isHistoryEnabled"
+
+    // Хотим дефолт = true. bool(forKey:) даёт false, если ключ не записан.
+    // Поэтому, если ключа нет — возвращаем true.
+    var isHistoryEnabled: Bool {
+        get {
+            let defaults = UserDefaults.standard
+            if defaults.object(forKey: key) == nil {
+                return true
+            }
+            return defaults.bool(forKey: key)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: key)
+        }
+    }
+}
+//
+//  TaskPollerImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+import Foundation
+
+final class TaskPollerImpl: TaskPoller {
+    private let api: CheaterAPI
+    init(api: CheaterAPI) { self.api = api }
+
+    func waitForAnalyzeResult(taskId: UUID, interval: TimeInterval = 1.0) async throws -> TaskReadDTO {
+        while true {
+            let state = try await api.getAnalyzeTask(id: taskId)
+            switch state.status {
+            case .completed, .failed: return state
+            case .queued, .running:
+                try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+            }
+        }
+    }
+
+    func waitForReverseResult(taskId: UUID, interval: TimeInterval = 1.0) async throws -> ReverseSearchGetResponse {
+        while true {
+            let r = try await api.getReverseSearch(id: taskId)
+            // считаем «готово» как когда все движки != "queued"/"running"
+            let done: Bool = {
+                let s = r.status
+                return !["queued","running"].contains(s.google.lowercased())
+                && !["queued","running"].contains(s.yandex.lowercased())
+                && !["queued","running"].contains(s.bing.lowercased())
+            }()
+            if done { return r }
+            try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+        }
+    }
+}
+//
+//  AuthRepositoryImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+import Foundation
+
+final class AuthRepositoryImpl: AuthRepository {
+    private let cfg: APIConfig
+    private let http: HTTPClient
+    private var tokens: TokenStorage
+
+    init(cfg: APIConfig, http: HTTPClient, tokens: TokenStorage) {
+        self.cfg = cfg; self.http = http; self.tokens = tokens
+    }
+
+    var isAuthorized: Bool { tokens.accessToken != nil }
+
+    func ensureAuthorized(apphudId: String) async throws {
+        if tokens.accessToken != nil { return }
+        let createURL = cfg.baseURL.appendingPathComponent("/api/user")
+        var r1 = URLRequest(url: createURL)
+        r1.httpMethod = "POST"
+        r1.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r1.httpBody = try JSONEncoder().encode(CreateUserDTO(apphud_id: apphudId))
+        let created: UserReadDTO = try await http.send(r1)
+        tokens.userId = created.id.uuidString
+
+        let authURL = cfg.baseURL.appendingPathComponent("/api/user/authorize")
+        var r2 = URLRequest(url: authURL)
+        r2.httpMethod = "POST"
+        r2.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r2.httpBody = try JSONEncoder().encode(AuthorizeUserDTO(user_id: created.id))
+        let token: TokenResponseDTO = try await http.send(r2)
+        tokens.accessToken = token.access_token
+    }
+}//
+//  HistoryStoreImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+import Foundation
+import UIKit
+
+final class HistoryStoreImpl: HistoryStore {
+    private let key = "cb.history.v1"
+    private let limit = 10
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func load() -> [HistoryRecord] {
+        guard let data = defaults.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([HistoryRecord].self, from: data)) ?? []
+    }
+
+    func add(_ record: HistoryRecord) {
+        var arr = load()
+
+        // глобальная де-дупликация:
+        if let q = record.query {
+            arr.removeAll { $0.kind == .name && $0.query == q }
+        } else if let data = record.imageJPEG {
+            let h = data.hashValue
+            arr.removeAll { $0.kind == .face && ($0.imageJPEG?.hashValue == h) }
+        }
+
+        arr.insert(record, at: 0)
+        if arr.count > limit {
+            arr = Array(arr.prefix(limit))
+        }
+        save(arr)
+    }
+
+    func clearAll() {
+        defaults.removeObject(forKey: key)
+    }
+
+    private func save(_ arr: [HistoryRecord]) {
+        if let data = try? JSONEncoder().encode(arr) {
+            defaults.set(data, forKey: key)
+        }
+    }
+}
+//
+//  CheaterAnalyzerServiceImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import Foundation
+import Combine
+
+final class CheaterAnalyzerServiceImpl: CheaterAnalyzerService {
+    func analyze(text: String) -> AnyPublisher<ConversationAnalysis, Error> {
+        let score = min(100, max(0, text.count % 100))
+        let mock = ConversationAnalysis(
+            riskScore: score,
+            redFlags: ["Asks to move off-platform", "Urgency for payment"],
+            recomendations: ["Ask for a short video call", "Don’t prepay"]
+        )
+        return  Just(mock)
+            .delay(for: .milliseconds(400), scheduler: DispatchQueue.main)
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+}
+//
+//  CheaterStoreImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+
+import Foundation
+
+final class CheaterStoreImpl: CheaterStore {
+    private let key = "cb.cheater.history.v1"
+    private let limit = 10
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) { self.defaults = defaults }
+
+    func load() -> [CheaterRecord] {
+        guard let data = defaults.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([CheaterRecord].self, from: data)) ?? []
+    }
+
+    func add(_ record: CheaterRecord) {
+        var arr = load()
+
+        // Простая де-дупликация по (kind, riskScore, note)
+        arr.removeAll { $0.kind == record.kind &&
+                        $0.riskScore == record.riskScore &&
+                        ($0.note ?? "") == (record.note ?? "") }
+
+        arr.insert(record, at: 0)
+        if arr.count > limit { arr = Array(arr.prefix(limit)) }
+        save(arr)
+    }
+
+    func clearAll() {
+        defaults.removeObject(forKey: key)
+    }
+
+    private func save(_ arr: [CheaterRecord]) {
+        if let data = try? JSONEncoder().encode(arr) {
+            defaults.set(data, forKey: key)
+        }
+    }
+}
+//
+//  SearchServiceImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import Foundation
+import Combine
+
+final class SearchServiceImpl: SearchService {
+    func searchByName(_ query: String) -> AnyPublisher<[ImageHit],Error> {
+        Just(query)
+            .delay(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .map { q in
+                guard !q.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
+                return (0..<3).map { i in
+                    ImageHit(
+                        title: "Result \(i+1) for '\(q)'",
+                        source: "example.com",
+                        thumbnailURL: URL(string: "https://picsum.photos/seed/\(q)\(i)/200/200") ,
+                        linkURL: URL(string: "https://example.com/\(i)")
+                    )
+                }
+            }
+            .setFailureType(to: Error.self)
+            .eraseToAnyPublisher()
+    }
+    
+    func searchByImage(_ jpegData: Data) -> AnyPublisher<[ImageHit],Error> {
+        Just((0..<3).map { i in
+                  ImageHit(
+                      title: "Similar \(i+1)",
+                      source: "lens.example",
+                      thumbnailURL: URL(string: "https://picsum.photos/seed/image\(i)/200/200"),
+                      linkURL: URL(string: "https://example.com/vis\(i)")
+                  )
+              })
+        .delay(for: .milliseconds(300), scheduler: DispatchQueue.main)
+        .setFailureType(to: Error.self)
+        .eraseToAnyPublisher()
+    }
+    
+    
+}
+//
+//  CheaterAPIImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+
+import Foundation
+
+final class CheaterAPIImpl: CheaterAPI {
+    private let cfg: APIConfig
+    private let http: HTTPClient
+    private let tokens: TokenStorage
+
+    init(cfg: APIConfig, http: HTTPClient, tokens: TokenStorage) {
+        self.cfg = cfg; self.http = http; self.tokens = tokens
+    }
+
+    private func authed(_ req: inout URLRequest) {
+        if let t = tokens.accessToken {
+            req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization")
+        }
+    }
+
+    // MARK: Conversation analyse (/api/task)
+    func createAnalyzeTask(
+        files: [MultipartFormData.FilePart],
+        conversation: String?
+    ) async throws -> TaskCreateResponse {
+        let url = cfg.baseURL.appendingPathComponent("/api/task")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        authed(&req)
+
+        let mp = MultipartFormData()
+        let body = mp.build(fields: [
+            "conversation": conversation,
+            "app_bundle": cfg.bundleId,
+            "webhook_url": nil
+        ], files: files)
+        req.setValue(mp.contentType, forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        return try await http.send(req)
+    }
+
+    // MARK: Place analyse (/api/task/place) — поле должно называться "file"
+    func createAnalyzePlaceTask(
+        file: MultipartFormData.FilePart,
+        conversation: String?
+    ) async throws -> TaskCreateResponse {
+        let url = cfg.baseURL.appendingPathComponent("/api/task/place")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        authed(&req)
+
+        let mp = MultipartFormData()
+        var one = file
+        // переименуем name строго в "file"
+        one = .init(name: "file", filename: file.filename, mimeType: file.mimeType, data: file.data)
+
+        let body = mp.build(fields: [
+            "conversation": conversation,
+            "app_bundle": cfg.bundleId,
+            "webhook_url": nil
+        ], files: [one])
+        req.setValue(mp.contentType, forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        return try await http.send(req)
+    }
+
+    func getAnalyzeTask(id: UUID) async throws -> TaskReadDTO {
+        let url = cfg.baseURL.appendingPathComponent("/api/task/\(id.uuidString)")
+        var req = URLRequest(url: url)
+        authed(&req)
+        return try await http.send(req)
+    }
+
+    // MARK: Reverse search (без изменений)
+    func createReverseSearch(image: MultipartFormData.FilePart) async throws -> ReverseSearchCreateResponse {
+        let url = cfg.baseURL.appendingPathComponent("/api/search")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        authed(&req)
+        let mp = MultipartFormData()
+        let body = mp.build(fields: [:], files: [image])
+        req.setValue(mp.contentType, forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        return try await http.send(req)
+    }
+
+    func getReverseSearch(id: UUID) async throws -> ReverseSearchGetResponse {
+        let url = cfg.baseURL.appendingPathComponent("/api/search/\(id.uuidString)")
+        var req = URLRequest(url: url)
+        authed(&req)
+        return try await http.send(req)
+    }
+}
+//
+//  TaskPoller.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+
+import Foundation
+
+protocol TaskPoller {
+    func waitForAnalyzeResult(taskId: UUID, interval: TimeInterval) async throws -> TaskReadDTO
+    func waitForReverseResult(taskId: UUID, interval: TimeInterval) async throws -> ReverseSearchGetResponse
+}
+
+//
+//  AuthRepository.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+import Foundation
+
+protocol AuthRepository {
+    func ensureAuthorized(apphudId: String) async throws
+    var isAuthorized: Bool { get }
+}
+
+//
+//  TokenStorage.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+import Foundation
+
+protocol TokenStorage {
+    var accessToken: String? { get set }
+    var userId: String? { get set }
+}
+
+//
+//  APIError.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+
+import Foundation
+
+enum APIError: Error {
+    case invalidURL
+    case http(Int, String?)         // status code + server body
+    case decoding(Error)
+    case transport(Error)
+    case noData
+    case unauthorized
+}
+
+extension APIError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "Invalid URL."
+        case .http(let code, let body):
+            let trimmed = body?
+                .replacingOccurrences(of: "\r", with: "")
+                .replacingOccurrences(of: "\n", with: " ")
+                .prefix(500) ?? ""
+            return "HTTP \(code). \(trimmed)"
+        case .decoding(let err):
+            return "Decoding error: \(err.localizedDescription)"
+        case .transport(let err):
+            return "Network error: \(err.localizedDescription)"
+        case .noData:
+            return "Empty response."
+        case .unauthorized:
+            return "Unauthorized (401)."
+        }
+    }
+}
+//
+//  HTTPClient.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+import Foundation
+
+public protocol HTTPClient {
+    func send<T: Decodable>(_ request: URLRequest) async throws -> T
+    func sendVoid(_ request: URLRequest) async throws
+}
+
+//
+//  CheaterAnalyzerService.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import Foundation
+import Combine
+
+public protocol CheaterAnalyzerService {
+    func analyze(text: String) -> AnyPublisher<ConversationAnalysis,Error>
+}
+ 
+//
+//  CheaterStore.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import Foundation
+
+protocol CheaterStore {
+    func load() -> [CheaterRecord]
+    func add(_ record: CheaterRecord)
+    func clearAll()
+}
+//
+//  CheaterAPI.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+import Foundation
+
+protocol CheaterAPI {
+    // conversation analyse
+    func createAnalyzeTask(
+        files: [MultipartFormData.FilePart],
+        conversation: String?
+    ) async throws -> TaskCreateResponse
+
+    /// /api/task/place — ожидает одиночный "file"
+    func createAnalyzePlaceTask(
+        file: MultipartFormData.FilePart,
+        conversation: String?
+    ) async throws -> TaskCreateResponse
+
+    func getAnalyzeTask(id: UUID) async throws -> TaskReadDTO
+
+    // reverse image search (как было)
+    func createReverseSearch(image: MultipartFormData.FilePart) async throws -> ReverseSearchCreateResponse
+    func getReverseSearch(id: UUID) async throws -> ReverseSearchGetResponse
+}
+//
+//  SearchService.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import Combine
+import Foundation
+
+public protocol SearchService {
+    func searchByName(_ query: String) -> AnyPublisher<[ImageHit], Error>
+    func searchByImage(_ jpegData: Data) -> AnyPublisher<[ImageHit],Error>
+}
+//
+//  HistoryStore.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import Foundation
+import Combine
+
+public protocol HistoryStore {
+    func load() -> [HistoryRecord]
+    func add(_ record: HistoryRecord)
+    func clearAll()
+}
+//
+//  SettingsStore.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import Foundation
+
+public protocol SettingsStore {
+    var isHistoryEnabled: Bool { get set }
+}
+//
+//  TaskDTO.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+import Foundation
+
+enum TaskStatus: String, Codable { case queued, running, completed, failed }
+
+struct TaskResult: Codable {
+    let risk_score: Int
+    let red_flags: [String]
+    let recommendations: [String]
+}
+
+struct TaskReadDTO: Codable {
+    let id: UUID
+    let status: TaskStatus
+    let result: TaskResult?
+    let error: String?
+}
+//
+//  UserReadDTO.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+
+import Foundation
+
+struct UserReadDTO: Codable {
+    let id: UUID
+    let apphud_id: String
+    let tokens: Int
+}
+
+struct CreateUserDTO: Codable { let apphud_id: String }
+struct AuthorizeUserDTO: Codable { let user_id: UUID }
+struct TokenResponseDTO: Codable { let access_token: String; let token_type: String }
+//
+//  TaskCreateResponse.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+import Foundation
+
+struct TaskCreateResponse: Codable {
+    let task_id: UUID
+}
+//
+//  ReverseSearchDTO.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+import Foundation
+
+struct ReverseSearchCreateResponse: Codable { let task_id: UUID }
+
+struct ReverseSearchGetResponse: Codable {
+    struct EnginesStatus: Codable { let google: String; let yandex: String; let bing: String }
+    struct Google: Codable {
+        struct VisualMatch: Codable {
+            let position: Int
+            let title: String
+            let link: String
+            let source: String
+            let thumbnail: String?
+        }
+        let visual_matches: [VisualMatch]?
+    }
+    let status: EnginesStatus
+    let results: Results
+    struct Results: Codable {
+        let google: Google?
+        // yandex/bing можно добавить при необходимости UI
+    }
+}
+//
+//  HistoryKind.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import Foundation
+import UIKit
+
+public enum HistoryKind: String, Codable {
+    case name   
+    case face
+}
+
+public struct HistoryRecord: Identifiable, Codable {
+    public let id: UUID
+    public let createdAt: Date
+    public let kind: HistoryKind
+
+    
+    public let query: String?
+
+    
+    public let imageJPEG: Data?
+
+    
+    public let titlePreview: String?
+    public let sourcePreview: String?
+
+    public init(id: UUID = UUID(),
+                createdAt: Date = .init(),
+                kind: HistoryKind,
+                query: String? = nil,
+                imageJPEG: Data? = nil,
+                titlePreview: String? = nil,
+                sourcePreview: String? = nil) {
+        self.id = id
+        self.createdAt = createdAt
+        self.kind = kind
+        self.query = query
+        self.imageJPEG = imageJPEG
+        self.titlePreview = titlePreview
+        self.sourcePreview = sourcePreview
+    }
+}
+//
+//  ConversationAnalysis.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import Foundation
+
+public struct ConversationAnalysis: Equatable {
+    public let riskScore: Int
+    public let redFlags: [String]
+    public let recomendations: [String]
+    
+    init(riskScore: Int, redFlags: [String], recomendations: [String]) {
+        self.riskScore = riskScore
+        self.redFlags = redFlags
+        self.recomendations = recomendations
+    }
+}
+//
+//  ImageHit.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import Foundation
+
+public struct ImageHit: Identifiable, Hashable {
+    public let id: UUID = UUID()
+    public let title: String
+    public let source: String
+    public let thumbnailURL: URL?
+    public let linkURL: URL?
+    
+    public init(title: String, source: String, thumbnailURL: URL?, linkURL: URL?) {
+        self.title = title
+        self.source = source
+        self.thumbnailURL = thumbnailURL
+        self.linkURL = linkURL
+    }
+}
+//
+//  CheaterRecord.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import Foundation
+
+struct CheaterRecord: Identifiable, Codable {
+    enum Kind: String, Codable { case image, file, text }
+    let id: UUID
+    let date: Date
+    let kind: Kind
+    let riskScore: Int
+    let note: String?                 // делаем опциональным (UI у тебя так использует)
+    let redFlags: [String]
+    let recommendations: [String]
+
+    init(id: UUID = UUID(),
+         date: Date = .init(),
+         kind: Kind,
+         riskScore: Int,
+         note: String?,
+         redFlags: [String],
+         recommendations: [String]) {
+        self.id = id
+        self.date = date
+        self.kind = kind
+        self.riskScore = riskScore
+        self.note = note
+        self.redFlags = redFlags
+        self.recommendations = recommendations
+    }
+}
+//
+//  SettingsView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import SwiftUI
+
+struct SettingsScreen: View {
+    @State private var isHistoryEnabled = true
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Toggle("Save history", isOn: $isHistoryEnabled)
+            }
+            .navigationTitle("Settings")
+        }
+    }
+}
+//
+//  SettingsViewModel.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+import Foundation
+import Combine
+
+final class SettingsViewModel: ObservableObject {
+    @Published var isHistoryEnabled: Bool {
+        didSet { store.isHistoryEnabled = isHistoryEnabled }
+    }
+
+    private var store: SettingsStore
+
+    init(store: SettingsStore) {
+        self.store = store
+        self.isHistoryEnabled = store.isHistoryEnabled
+    }
+}
+//
+//  SearchViewModel.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import Foundation
+import Combine
+import UIKit
+
+final class SearchViewModel: ObservableObject {
+
+    // MARK: - Input
+    @Published var query: String = ""
+
+    // MARK: - Output
+    @Published private(set) var results: [ImageHit] = []
+    @Published private(set) var isLoading: Bool = false            // мелкие индикаторы (в кнопках)
+    @Published private(set) var isBlockingLoading: Bool = false     // full-screen загрузка
+    @Published private(set) var errorText: String?
+
+    // MARK: - Deps
+    private let search: SearchService
+    private let history: HistoryStore
+    // settings можно использовать позже (флаги, лимиты, т.п.)
+    private let settings: SettingsStore?
+
+    private var bag = Set<AnyCancellable>()
+
+    // MARK: - Init
+    init(search: SearchService,
+         history: HistoryStore,
+         settings: SettingsStore? = nil)
+    {
+        self.search = search
+        self.history = history
+        self.settings = settings
+        bindQueryDebounce()
+    }
+
+    // MARK: - Debounce по вводу (без блокирующей загрузки)
+    private func bindQueryDebounce() {
+        $query
+            .removeDuplicates()
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { [weak self] q -> AnyPublisher<[ImageHit], Never> in
+                guard let self, !q.isEmpty else { return Just([]).eraseToAnyPublisher() }
+                
+                return self.search.searchByName(q)
+                    .map { $0 }
+                    .catch { [weak self] err -> AnyPublisher<[ImageHit], Never> in
+                        self?.errorText = err.localizedDescription
+                        return Just([]).eraseToAnyPublisher()
+                    }
+                    .eraseToAnyPublisher()
+            }
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$results)
+    }
+
+    // MARK: - Явный запуск по кнопке «Find»
+    func runNameSearch() {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return }
+
+        isLoading = true
+        isBlockingLoading = true
+        errorText = nil
+
+        search.searchByName(q)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] completion in
+                guard let self else { return }
+                self.isLoading = false
+                self.isBlockingLoading = false
+                if case .failure(let err) = completion {
+                    self.errorText = err.localizedDescription
+                    self.results = []
+                }
+            } receiveValue: { [weak self] hits in
+                guard let self else { return }
+                self.results = hits
+
+                
+                let previewTitle  = hits.first?.title
+                let previewSource = hits.first?.source
+                let rec = HistoryRecord(
+                    kind: .name,
+                    query: q,
+                    imageJPEG: nil,
+                    titlePreview: previewTitle,
+                    sourcePreview: previewSource
+                )
+                self.history.add(rec)
+            }
+            .store(in: &bag)
+    }
+
+    // MARK: - Запуск по кнопке «Analyze» (по фото)
+    func runImageSearch(jpegData: Data) {
+        isLoading = true
+        isBlockingLoading = true
+        errorText = nil
+
+        search.searchByImage(jpegData)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] completion in
+                guard let self else { return }
+                self.isLoading = false
+                self.isBlockingLoading = false
+                if case .failure(let err) = completion {
+                    self.errorText = err.localizedDescription
+                    self.results = []
+                }
+            } receiveValue: { [weak self] hits in
+                guard let self else { return }
+                self.results = hits
+
+                
+                let thumbData = (UIImage(data: jpegData)?
+                    .jpegData(compressionQuality: 0.5)) ?? jpegData
+
+                let rec = HistoryRecord(
+                    kind: .face,
+                    query: nil,
+                    imageJPEG: thumbData,
+                    titlePreview: hits.first?.title,
+                    sourcePreview: hits.first?.source
+                )
+                self.history.add(rec)
+            }
+            .store(in: &bag)
+    }
+
+    // MARK: - Прочее (если нужно использовать)
+    func resetResults() {
+        results = []
+        errorText = nil
+    }
+}
+//
+//  FaceSearchView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/27/25.
+//
+
+import SwiftUI
+import PhotosUI
+import UIKit
+
+struct FaceSearchView: View {
+    @ObservedObject var vm: SearchViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var item: PhotosPickerItem?
+    @State private var image: UIImage?
+
+    @State private var goResults = false
+    @State private var didAnalyze = false
+
+    var body: some View {
+        ZStack {
+            Tokens.Color.backgroundMain.ignoresSafeArea()
+
+            VStack(spacing: Tokens.Spacing.x16) {
+                // Header
+                HStack {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "arrow.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Tokens.Color.textPrimary)
+                            .padding(12)
+                            .background(
+                                Tokens.Color.surfaceCard,
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            )
+                            .apply(Tokens.Shadow.card)
+                    }
+
+                    Spacer()
+
+                    Text("Face search")
+                        .font(Tokens.Font.title)
+                        .foregroundStyle(Tokens.Color.textPrimary)
+
+                    Spacer().frame(width: 44)
+                }
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.top, Tokens.Spacing.x16)
+
+                // Preview
+                Group {
+                    if let img = image {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, Tokens.Spacing.x16)
+                            .padding(.top, Tokens.Spacing.x12)
+                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+                            )
+                    } else {
+                        ContentUnavailableView(
+                            "Select a photo",
+                            systemImage: "photo",
+                            description: Text("Pick one image to search by face.")
+                        )
+                        .padding(.horizontal, Tokens.Spacing.x16)
+                        .padding(.top, Tokens.Spacing.x32)
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+        }
+        .navigationBarBackButtonHidden(true)
+
+        // Bottom tools panel (как на макете)
+        .safeAreaInset(edge: .bottom) {
+            HStack(spacing: Tokens.Spacing.x16) {
+                CircleTool(system: "rotate.left")  { /* позже */ }
+                CircleTool(system: "rotate.right") { /* позже */ }
+                CircleTool(system: "crop")         { /* позже */ }
+
+                Spacer()
+
+                // Pink CTA →
+                Button {
+                    guard let img = image,
+                          let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
+                    didAnalyze = true
+                    vm.runImageSearch(jpegData: jpeg)
+                } label: {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 52, height: 52)
+                        .background(
+                            Tokens.Color.accent,
+                            in: Circle()
+                        )
+                        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                }
+                .buttonStyle(.plain)
+                .disabled(image == nil || vm.isLoading)
+            }
+            .padding(.horizontal, Tokens.Spacing.x20)
+            .padding(.vertical, Tokens.Spacing.x16)
+            .background(
+                Tokens.Color.surfaceCard,
+                ignoresSafeAreaEdges: .bottom
+            )
+        }
+
+        
+        .photosPicker(isPresented: Binding(
+            get: { image == nil && item == nil }, set: { _ in }
+        ), selection: $item, matching: .images)
+
+        .onChange(of: item) { _, newValue in
+            Task { @MainActor in
+                guard let data = try? await newValue?.loadTransferable(type: Data.self),
+                      let img = UIImage(data: data) else { return }
+                image = img
+            }
+        }
+
+        
+        .onChange(of: vm.isLoading) { was, isNow in
+            if didAnalyze && was == true && isNow == false {
+                didAnalyze = false
+                goResults = true
+            }
+        }
+        .navigationDestination(isPresented: $goResults) {
+            SearchResultsView(results: vm.results, mode: .face)
+        }
+
+        
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { vm.isBlockingLoading },
+                set: { _ in }
+            )
+        ) {
+            LoadingView(mode: .face, previewImage: image, cancelAction: nil)
+                .interactiveDismissDisabled(true)
+        }
+    }
+}
+
+private struct CircleTool: View {
+    let system: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Tokens.Color.textPrimary)
+                .frame(width: 48, height: 48)
+                .background(
+                    Tokens.Color.backgroundMain,
+                    in: Circle()
+                )
+                .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
+    }
+}
+//
+//  SearchScreen.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import SwiftUI
+
+struct SearchScreen: View {
+    @State private var goName = false
+    @State private var goPhoto = false
+    private let vm: SearchViewModel
+
+    init(vm: SearchViewModel) { self.vm = vm }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: Tokens.Spacing.x16) {
+                Text("Find your partner")
+                    .font(Tokens.Font.h2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, Tokens.Spacing.x8)
+
+                VStack(spacing: Tokens.Spacing.x12) {
+                    CardRow(
+                        icon: "text.magnifyingglass",
+                        title: "Search for a partner by name"
+                    ) { goName = true }
+
+                    CardRow(
+                        icon: "face.smiling",
+                        title: "Finding a partner by face"
+                    ) { goPhoto = true }
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+            .navigationDestination(isPresented: $goName) {
+                NameSearchView(vm: vm)
+            }
+            .navigationDestination(isPresented: $goPhoto) {
+                FaceSearchView(vm: vm)
+            }
+        }
+    }
+}
+
+private struct CardRow: View {
+    let icon: String
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Tokens.Spacing.x12) {
+                Image(systemName: icon)
+                    .frame(width: 28, height: 28)
+                    .foregroundStyle(Tokens.Color.accent)
+                    .background(
+                        Tokens.Color.accent.opacity(0.1),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                Text(title)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+                Spacer()
+            }
+            .padding(.vertical, Tokens.Spacing.x12)
+            .padding(.horizontal, Tokens.Spacing.x12)
+            .background(
+                Tokens.Color.surfaceCard,
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
+        }
+        .buttonStyle(.plain)
+    }
+}
+//
+//  NameSearchView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+import SwiftUI
+
+struct NameSearchView: View {
+    @ObservedObject var vm: SearchViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var goResults = false
+    @State private var didSubmit = false
+
+    var body: some View {
+        ZStack {
+            Tokens.Color.backgroundMain.ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: Tokens.Spacing.x16) {
+                // Header
+                HStack {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "arrow.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Tokens.Color.textPrimary)
+                            .padding(12)
+                            .background(
+                                Tokens.Color.surfaceCard,
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            )
+                            .apply(Tokens.Shadow.card)
+                    }
+
+                    Spacer()
+
+                    Text("Name search")
+                        .font(Tokens.Font.title)
+                        .foregroundStyle(Tokens.Color.textPrimary)
+
+                    Spacer().frame(width: 44) // симметрия
+                }
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.top, Tokens.Spacing.x16)
+
+                // Search field
+                VStack(spacing: Tokens.Spacing.x16) {
+                    SearchField("Partner's name...", text: $vm.query)
+                        .padding(.horizontal, Tokens.Spacing.x16)
+
+                    Spacer(minLength: Tokens.Spacing.x16)
+                }
+            }
+        }
+        .navigationBarBackButtonHidden(true)
+        .navigationBarTitleDisplayMode(.inline)
+
+        // Нижняя большая кнопка Find
+        .safeAreaInset(edge: .bottom) {
+            HStack {
+                PrimaryButton(
+                    "Find",
+                    isLoading: vm.isLoading,
+                    isDisabled: vm.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || vm.isLoading
+                ) {
+                    didSubmit = true
+                    vm.runNameSearch()
+                }
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.vertical, Tokens.Spacing.x16)
+            .background(
+                Tokens.Color.backgroundMain,
+                ignoresSafeAreaEdges: .bottom
+            )
+        }
+
+        
+        .onChange(of: vm.isLoading) { was, isNow in
+            if didSubmit && was == true && isNow == false {
+                didSubmit = false
+                goResults = true
+            }
+        }
+        .navigationDestination(isPresented: $goResults) {
+            SearchResultsView(results: vm.results, mode: .name)
+        }
+
+        
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { vm.isBlockingLoading },
+                set: { _ in }
+            )
+        ) {
+            LoadingView(mode: .name, previewImage: nil, cancelAction: nil)
+                .interactiveDismissDisabled(true)
+        }
+    }
+}
+//
+//  SearchResultsView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import SwiftUI
+
+struct SearchResultsView: View {
+    enum Mode { case face, name }
+
+    let results: [ImageHit]
+    let mode: Mode
+
+    private let columns = [
+        GridItem(.flexible(), spacing: Tokens.Spacing.x16),
+        GridItem(.flexible(), spacing: Tokens.Spacing.x16)
+    ]
+
+    @Namespace private var ns
+
+    var body: some View {
+        ScrollView {
+            if results.isEmpty {
+                ContentUnavailableView(
+                    "No results found",
+                    systemImage: "magnifyingglass.circle",
+                    description: Text("No matches found. Please try a different photo or name.")
+                )
+                .padding(.top, Tokens.Spacing.x24)
+            } else {
+                LazyVGrid(columns: columns, spacing: Tokens.Spacing.x16) {
+                    ForEach(results) { hit in
+                        if mode == .face {
+                            FaceResultCard(hit: hit)
+                        } else {
+                            NameResultCard(hit: hit)
+                        }
+                    }
+                }
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.vertical, Tokens.Spacing.x24)
+                .animation(.easeInOut(duration: 0.25), value: results)
+            }
+        }
+        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+        .navigationTitle(mode == .face ? "Face results" : "Name results")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Cards
+
+private struct FaceResultCard: View {
+    let hit: ImageHit
+
+    var body: some View {
+        VStack(spacing: Tokens.Spacing.x8) {
+            AsyncThumb(url: hit.thumbnailURL)
+                .frame(height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Tokens.Color.surfaceCard,
+            in: RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+        )
+        .apply(Tokens.Shadow.card)
+    }
+}
+
+private struct NameResultCard: View {
+    let hit: ImageHit
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.Spacing.x8) {
+            AsyncThumb(url: hit.thumbnailURL)
+                .frame(height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(hit.title)
+                    .font(Tokens.Font.caption)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+                    .lineLimit(1)
+                Text(hit.source)
+                    .font(Tokens.Font.captionRegular)
+                    .foregroundStyle(Tokens.Color.textSecondary)
+                    .lineLimit(1)
+            }
+
+            if let url = hit.linkURL {
+                Link(destination: url) {
+                    HStack(spacing: 4) {
+                        Text("Open")
+                        Image(systemName: "arrow.up.right.square")
+                    }
+                    .font(Tokens.Font.caption)
+                    .foregroundStyle(Tokens.Color.accent)
+                }
+                .padding(.top, Tokens.Spacing.x4)
+            }
+        }
+        .padding(Tokens.Spacing.x12)
+        .background(
+            Tokens.Color.surfaceCard,
+            in: RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+        )
+        .apply(Tokens.Shadow.card)
+    }
+}
+
+private struct AsyncThumb: View {
+    let url: URL?
+    var body: some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .empty:
+                ZStack { Color.gray.opacity(0.1); ProgressView() }
+            case .success(let image):
+                image.resizable().scaledToFill().clipped()
+            case .failure:
+                ZStack {
+                    Color.gray.opacity(0.2)
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(.gray)
+                }
+            @unknown default:
+                EmptyView()
+            }
+        }
+    }
+}
+//
+//  LoadingView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import SwiftUI
+
+struct LoadingView: View {
+    enum Mode { case name, face }
+
+    let mode: Mode
+    let previewImage: UIImage?
+    let cancelAction: (() -> Void)?
+
+    @State private var progress: CGFloat = 0.35 // моковый прогресс для визуала
+
+    var body: some View {
+        ZStack {
+            Tokens.Color.backgroundMain.ignoresSafeArea()
+
+            VStack(spacing: Tokens.Spacing.x24) {
+                if mode == .face, let ui = previewImage {
+                    Image(uiImage: ui)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 260)
+                        .padding(.horizontal, Tokens.Spacing.x16)
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+                        )
+
+                    Text("Photo analysis")
+                        .font(Tokens.Font.bodyMedium18)
+                        .foregroundStyle(Tokens.Color.textPrimary)
+
+                    // Простой прогресс (визуальный)
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Tokens.Color.borderNeutral.opacity(0.4)).frame(height: 8)
+                        Capsule().fill(Tokens.Color.accent).frame(width: progressWidth, height: 8)
+                    }
+                    .padding(.horizontal, Tokens.Spacing.x16)
+                } else {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: Tokens.Color.accent))
+                        .scaleEffect(1.6)
+
+                    Text("Searching...")
+                        .font(Tokens.Font.bodyMedium18)
+                        .foregroundStyle(Tokens.Color.textPrimary)
+                }
+
+                if let cancelAction {
+                    Button("Cancel") { cancelAction() }
+                        .font(Tokens.Font.caption)
+                        .foregroundStyle(Tokens.Color.textSecondary)
+                        .padding(.top, Tokens.Spacing.x8)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.top, Tokens.Spacing.x24)
+        }
+        .onAppear {
+            // лёгкая псевдо-анимация прогресса
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                progress = 0.7
+            }
+        }
+    }
+
+    private var progressWidth: CGFloat {
+        UIScreen.main.bounds.width * progress
+    }
+}
+//
+//  HistoryViewModel.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+import Foundation
+import Combine
+import UIKit
+
+final class HistoryViewModel: ObservableObject {
+    // MARK: Search-history
+    @Published private(set) var items: [HistoryRecord] = []
+
+    // MARK: Cheater-history
+    @Published private(set) var cheaterItems: [CheaterRecord] = []
+
+    @Published var segment: Segment = .search
+    enum Segment: Equatable { case search, cheater }
+
+    // Навигация/статусы для реплея поиска
+    @Published private(set) var rerunResults: [ImageHit] = []
+    @Published private(set) var isLoading = false
+    @Published var errorText: String?
+
+    private let store: HistoryStore
+    private let cheaterStore: CheaterStore
+    private let search: SearchService
+    private var bag = Set<AnyCancellable>()
+
+    init(store: HistoryStore,
+         cheaterStore: CheaterStore,
+         search: SearchService) {
+        self.store = store
+        self.cheaterStore = cheaterStore
+        self.search = search
+        reload()
+    }
+
+    func reload() {
+        items = store.load()
+        cheaterItems = cheaterStore.load()
+    }
+
+    // MARK: Search tab
+    func clearSearch() {
+        store.clearAll()
+        items = []
+    }
+
+    func onTapSearch(_ rec: HistoryRecord) {
+        // повтор поиска
+        isLoading = true
+        errorText = nil
+
+        let pub: AnyPublisher<[ImageHit], Error>
+        if rec.kind == .name, let q = rec.query {
+            pub = search.searchByName(q)
+        } else if rec.kind == .face, let data = rec.imageJPEG {
+            pub = search.searchByImage(data)
+        } else {
+            isLoading = false
+            return
+        }
+
+        pub
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] comp in
+                self?.isLoading = false
+                if case .failure(let err) = comp {
+                    self?.errorText = err.localizedDescription
+                }
+            } receiveValue: { [weak self] hits in
+                self?.rerunResults = hits
+            }
+            .store(in: &bag)
+    }
+
+    // MARK: Cheater tab
+    func clearCheater() {
+        cheaterStore.clearAll()
+        cheaterItems = []
+    }
+
+ 
+    func onTapCheater(_ rec: CheaterRecord) {
+        // TODO: navigate to CheaterResultView (в следующем шаге)
+    }
+}
+//
+//  HistoryView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+import SwiftUI
+import UIKit
+
+struct HistoryView: View {
+    @StateObject var vm: HistoryViewModel
+    @State private var goResults = false
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Title
+            HStack {
+                Text("History")
+                    .font(Tokens.Font.title)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+                Spacer()
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.top, Tokens.Spacing.x16)
+            
+            // Segment
+            SegmentCapsule(selected: $vm.segment)
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.top, Tokens.Spacing.x12)
+            
+            // Content
+            Group {
+                if vm.segment == .search {
+                    topBarClear(isHidden: vm.items.isEmpty) { vm.clearSearch() }
+                    HistoryGrid(items: vm.items) { rec in
+                        vm.onTapSearch(rec)
+                    }
+                    .padding(.horizontal, Tokens.Spacing.x16)
+                    .padding(.top, Tokens.Spacing.x16)
+                } else {
+                    topBarClear(isHidden: vm.cheaterItems.isEmpty) { vm.clearCheater() }
+                    CheaterList(items: vm.cheaterItems) { rec in
+                        vm.onTapCheater(rec)
+                    }
+                    .padding(.horizontal, Tokens.Spacing.x16)
+                    .padding(.top, Tokens.Spacing.x16)
+                }
+            }
+            
+            Spacer(minLength: 0)
+        }
+        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            vm.reload()
+        }
+        .onChange(of: vm.rerunResults) { _, hits in
+            if !hits.isEmpty { goResults = true }
+        }
+        .navigationDestination(isPresented: $goResults) {
+            SearchResultsView(results: vm.rerunResults, mode: .name)
+        }
+    }
+    
+    // small helper
+    @ViewBuilder
+    private func topBarClear(isHidden: Bool, action: @escaping () -> Void) -> some View {
+        HStack {
+            Spacer()
+            if !isHidden {
+                Button("Clear") { action() }
+                    .font(Tokens.Font.caption)
+                    .foregroundStyle(Tokens.Color.accent)
+            }
+        }
+        .padding(.horizontal, Tokens.Spacing.x16)
+        .padding(.top, Tokens.Spacing.x8)
+    }
+}
+
+// MARK: - Segment
+
+private struct SegmentCapsule: View {
+    @Binding var selected: HistoryViewModel.Segment
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Tokens.Color.surfaceCard)
+                .apply(Tokens.Shadow.card)
+            
+            HStack(spacing: 0) {
+                seg("Search", .search)
+                seg("Cheater", .cheater)
+            }
+        }
+        .frame(height: 44)
+    }
+    
+    private func seg(_ title: String, _ seg: HistoryViewModel.Segment) -> some View {
+        Button { selected = seg } label: {
+            Text(title)
+                .font(Tokens.Font.caption)
+                .foregroundStyle(selected == seg ? .white : Tokens.Color.textPrimary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    Group {
+                        if selected == seg {
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .fill(Tokens.Color.accent)
+                        }
+                    }
+                )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Search grid (как раньше)
+
+private struct HistoryGrid: View {
+    let items: [HistoryRecord]
+    let onTap: (HistoryRecord) -> Void
+    
+    private let columns = [
+        GridItem(.flexible(), spacing: Tokens.Spacing.x16),
+        GridItem(.flexible(), spacing: Tokens.Spacing.x16)
+    ]
+    
+    var body: some View {
+        if items.isEmpty {
+            ContentUnavailableView("No history yet",
+                                   systemImage: "clock.arrow.circlepath",
+                                   description: Text("Your last 10 searches will appear here."))
+            .padding(.top, Tokens.Spacing.x24)
+        } else {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: Tokens.Spacing.x16) {
+                    ForEach(items) { rec in
+                        Button { onTap(rec) } label: {
+                            HistoryCard(rec: rec)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.bottom, Tokens.Spacing.x24)
+            }
+        }
+    }
+}
+
+private struct HistoryCard: View {
+    let rec: HistoryRecord
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.Spacing.x8) {
+            if rec.kind == .face, let d = rec.imageJPEG, let img = UIImage(data: d) {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 150)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            } else {
+                ZStack {
+                    Tokens.Color.backgroundMain
+                    Image(systemName: "person.text.rectangle")
+                        .font(.system(size: 28))
+                        .foregroundStyle(Tokens.Color.textSecondary)
+                }
+                .frame(height: 150)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            if let q = rec.query {
+                Text(q).font(Tokens.Font.caption)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+                    .lineLimit(1)
+            }
+            if let s = rec.sourcePreview {
+                Text(s).font(Tokens.Font.captionRegular)
+                    .foregroundStyle(Tokens.Color.textSecondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(Tokens.Spacing.x12)
+        .background(
+            Tokens.Color.surfaceCard,
+            in: RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+        )
+        .apply(Tokens.Shadow.card)
+    }
+}
+
+// MARK: - Cheater list
+
+private struct CheaterList: View {
+    let items: [CheaterRecord]
+    let onTap: (CheaterRecord) -> Void
+    
+    var body: some View {
+        if items.isEmpty {
+            ContentUnavailableView("No cheater items yet",
+                                   systemImage: "text.magnifyingglass",
+                                   description: Text("Analyze a chat to see it here."))
+            .padding(.top, Tokens.Spacing.x24)
+        } else {
+            ScrollView {
+                VStack(spacing: Tokens.Spacing.x12) {
+                    ForEach(items) { rec in
+                        Button { onTap(rec) } label: {
+                            CheaterRow(rec: rec)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.bottom, Tokens.Spacing.x24)
+            }
+        }
+    }
+}
+
+private struct CheaterRow: View {
+    let rec: CheaterRecord
+    
+    var body: some View {
+        HStack(spacing: Tokens.Spacing.x12) {
+            // Левая иконка (как в макете)
+            ZStack {
+                Tokens.Color.backgroundMain
+                Image(systemName: rec.kind == .file ? "folder" : "photo")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Tokens.Color.accent)
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("High risk level")
+                    .font(Tokens.Font.caption)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+                if let note = rec.note, !note.isEmpty {
+                    Text(note)
+                        .font(Tokens.Font.captionRegular)
+                        .foregroundStyle(Tokens.Color.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+            
+            Spacer()
+            
+            Text("\(rec.riskScore)%")
+                .font(Tokens.Font.caption)
+                .foregroundStyle(Tokens.Color.textPrimary)
+        }
+        .padding(.vertical, Tokens.Spacing.x12)
+        .padding(.horizontal, Tokens.Spacing.x12)
+        .background(
+            Tokens.Color.surfaceCard,
+            in: RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+        )
+        .apply(Tokens.Shadow.card)
+    }
+}
+//
+//  CheaterScreen.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+
+import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
+
+struct CheaterView: View {
+    @ObservedObject var vm: CheaterViewModel
+
+    // PhotosPicker
+    @State private var photoItem: PhotosPickerItem?
+    @State private var showPhotoPicker = false
+
+    // Document picker
+    @State private var showFilePicker = false
+
+    // (опционально) сопроводительный текст переписки
+    @State private var conversationText: String = ""
+
+    init(vm: CheaterViewModel) {
+        self.vm = vm
+    }
+
+    var body: some View {
+        VStack(spacing: Tokens.Spacing.x16) {
+            content
+        }
+        .padding(.horizontal, Tokens.Spacing.x16)
+        .padding(.top, Tokens.Spacing.x24)
+        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+        .navigationTitle("Cheater")
+
+        // 🔹 Нормальный способ показать PhotosPicker
+        .photosPicker(
+            isPresented: $showPhotoPicker,
+            selection: $photoItem,
+            matching: .images
+        )
+
+        // 🔹 Встроенный файловый импортер
+        .fileImporter(
+            isPresented: $showFilePicker,
+            allowedContentTypes: [.pdf, .png, .jpeg, .plainText],
+            allowsMultipleSelection: false
+        ) { result in
+            if case .success(let urls) = result,
+               let url = urls.first,
+               let data = try? Data(contentsOf: url) {
+                vm.showFile(name: url.lastPathComponent, data: data)
+            }
+        }
+
+        // Когда пользователь выбрал фото — грузим его и шлём во VM
+        .onChange(of: photoItem) { item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let img = UIImage(data: data) {
+                    await MainActor.run { vm.showImage(img) }
+                }
+                // Сброс, чтобы можно было выбрать тот же файл снова
+                await MainActor.run { photoItem = nil }
+            }
+        }
+    }
+
+    // MARK: - Секции по состояниям
+
+    @ViewBuilder
+    private var content: some View {
+        switch vm.state {
+        case .idle:
+            idleView
+
+        case .previewImage(let img):
+            imagePreview(img)
+
+        case .previewFile(let name, _):
+            filePreview(name: name)
+
+        case .uploading(let p):
+            uploadingView(progress: p)
+
+        case .result(let r):
+            resultView(r)
+
+        case .error(let msg):
+            errorView(msg)
+        }
+    }
+
+    // Idle
+    private var idleView: some View {
+        VStack(spacing: Tokens.Spacing.x24) {
+            VStack(spacing: Tokens.Spacing.x8) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 56))
+                    .foregroundColor(Tokens.Color.textSecondary)
+                Text("Select photo or file to analyse")
+                    .font(Tokens.Font.body)
+                    .foregroundColor(Tokens.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, Tokens.Spacing.x16)
+
+            PrimaryButton("Pick photo") { showPhotoPicker = true }
+            PrimaryButton("Pick file")  { showFilePicker  = true }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    // Image preview
+    private func imagePreview(_ img: UIImage) -> some View {
+        VStack(spacing: Tokens.Spacing.x16) {
+            ScrollView {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .cornerRadius(Tokens.Radius.medium)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+                            .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+                    )
+            }
+
+            PrimaryButton("Analyse") {
+                vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
+            }
+
+            Button("Choose another…") { showSourceActionSheet() }
+                .font(Tokens.Font.body)
+                .foregroundColor(Tokens.Color.textSecondary)
+        }
+    }
+
+    // File preview
+    private func filePreview(name: String) -> some View {
+        VStack(spacing: Tokens.Spacing.x16) {
+            VStack(spacing: Tokens.Spacing.x12) {
+                Image(systemName: "doc.richtext")
+                    .font(.system(size: 56))
+                    .foregroundColor(Tokens.Color.textSecondary)
+                Text(name)
+                    .font(Tokens.Font.body)
+                    .foregroundColor(Tokens.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, Tokens.Spacing.x16)
+
+            PrimaryButton("Analyse") {
+                vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
+            }
+
+            Button("Choose another…") { showSourceActionSheet() }
+                .font(Tokens.Font.body)
+                .foregroundColor(Tokens.Color.textSecondary)
+            Spacer(minLength: 0)
+        }
+    }
+
+    // Uploading
+    private func uploadingView(progress p: Int) -> some View {
+        VStack(spacing: Tokens.Spacing.x16) {
+            ProgressView(value: Double(p), total: 100)
+                .padding(.horizontal, Tokens.Spacing.x16)
+            Text("\(p)%")
+                .font(Tokens.Font.body)
+                .foregroundColor(Tokens.Color.textSecondary)
+            Spacer(minLength: 0)
+        }
+    }
+
+    // Result
+    private func resultView(_ r: TaskResult) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Spacing.x16) {
+            Text("Risk analysis complete ✅")
+                .font(Tokens.Font.title)
+                .foregroundColor(Tokens.Color.textPrimary)
+
+            Text("\(r.risk_score)%")
+                .font(Tokens.Font.h1)
+                .foregroundColor(Tokens.Color.textPrimary)
+
+            Text(riskLevelText(r.risk_score))
+                .font(Tokens.Font.body)
+                .foregroundColor(Tokens.Color.textSecondary)
+
+            Divider()
+
+            Text("Red flags").font(Tokens.Font.subtitle)
+            ForEach(r.red_flags, id: \.self) { Text("• \($0)") }
+
+            Divider()
+
+            Text("Recommendations").font(Tokens.Font.subtitle)
+            ForEach(r.recommendations, id: \.self) { Text("• \($0)") }
+
+            PrimaryButton("Select another") { showSourceActionSheet() }
+                .padding(.top, Tokens.Spacing.x16)
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    // Error
+    private func errorView(_ msg: String) -> some View {
+        VStack(spacing: Tokens.Spacing.x16) {
+            Text(msg)
+                .font(Tokens.Font.body)
+                .foregroundColor(.red)
+                .multilineTextAlignment(.center)
+
+            PrimaryButton("Try again") { showSourceActionSheet() }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func riskLevelText(_ score: Int) -> String {
+        switch score {
+        case 0..<34:  return "Low risk level"
+        case 34..<67: return "Medium risk level"
+        default:      return "High risk level"
+        }
+    }
+
+    private func showSourceActionSheet() {
+        // Просто показываем оба пикера как отдельные действия
+        // (если хочешь actionSheet — можно собрать через .confirmationDialog)
+        showPhotoPicker = true
+        // или, если нужно меню выбора — раскомментируй confirmationDialog ниже
+    }
+}
+//
+//  CheaterViewModel.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import Foundation
+import UIKit
+import Combine
+
+@MainActor
+final class CheaterViewModel: ObservableObject {
+
+    enum State {
+        case idle
+        case previewImage(UIImage)
+        case previewFile(name: String, data: Data)
+        case uploading(progress: Int)         // 0..100
+        case result(TaskResult)
+        case error(String)
+    }
+
+    @Published private(set) var state: State = .idle
+
+    private let auth: AuthRepository
+    private let api: CheaterAPI
+    private let poller: TaskPoller
+    private let store: CheaterStore
+    private let cfg: APIConfig
+
+    init(auth: AuthRepository, api: CheaterAPI, poller: TaskPoller, store: CheaterStore, cfg: APIConfig) {
+        self.auth = auth; self.api = api; self.poller = poller; self.store = store; self.cfg = cfg
+    }
+
+    func showImage(_ image: UIImage) { state = .previewImage(image) }
+    func showFile(name: String, data: Data) { state = .previewFile(name: name, data: data) }
+
+    func analyseCurrent(conversation: String? = nil, apphudId: String) {
+        Task {
+            do {
+                try await auth.ensureAuthorized(apphudId: apphudId)
+
+                switch state {
+                case .previewImage(let img):
+                    guard let data = img.jpegData(compressionQuality: 0.9) else { throw APIError.noData }
+                    try await runTaskForImage(data: data, conversation: conversation)
+
+                case .previewFile(let name, let data):
+                    try await runTask(files: [
+                        .init(name: "files", filename: name, mimeType: mime(for: name), data: data)
+                    ], conversation: conversation, kind: .file)
+
+                default:
+                    break
+                }
+            } catch {
+                let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                state = .error(msg)
+            }
+        }
+    }
+
+    // MARK: - Private
+
+    private func runTaskForImage(data: Data, conversation: String?) async throws {
+        state = .uploading(progress: 5)
+        let file = MultipartFormData.FilePart(name: "files", filename: "image.jpg", mimeType: "image/jpeg", data: data)
+
+        do {
+            try await runTask(files: [file], conversation: conversation, kind: .image)
+        } catch let APIError.http(code, _) where code == 400 || code == 422 {
+            // fallback на /api/task/place (ожидает "file")
+            let created = try await api.createAnalyzePlaceTask(file: file, conversation: conversation)
+            try await handleTaskLifecycle(createdId: created.task_id, kind: .image)
+        }
+    }
+
+    private func runTask(files: [MultipartFormData.FilePart], conversation: String?, kind: CheaterRecord.Kind) async throws {
+        state = .uploading(progress: 10)
+        let created = try await api.createAnalyzeTask(files: files, conversation: conversation)
+        try await handleTaskLifecycle(createdId: created.task_id, kind: kind)
+    }
+
+    private func handleTaskLifecycle(createdId: UUID, kind: CheaterRecord.Kind) async throws {
+        state = .uploading(progress: 25)
+
+        // Всегда поллим по id — бэк возвращает данные задачи через GET
+        state = .uploading(progress: 45)
+        let final = try await poller.waitForAnalyzeResult(taskId: createdId, interval: 1.0)
+
+        if final.status == .completed, let r = final.result {
+            store.add(.init(date: Date(),
+                            kind: kind,
+                            riskScore: r.risk_score,
+                            note: "AI risk analysis",
+                            redFlags: r.red_flags,
+                            recommendations: r.recommendations))
+            state = .result(r)
+        } else {
+            throw APIError.http(500, final.error ?? "Analysis failed")
+        }
+    }
+
+    private func mime(for filename: String) -> String {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        switch ext {
+        case "jpg","jpeg": return "image/jpeg"
+        case "png": return "image/png"
+        case "pdf": return "application/pdf"
+        case "txt": return "text/plain"
+        default: return "application/octet-stream"
+        }
+    }
+}

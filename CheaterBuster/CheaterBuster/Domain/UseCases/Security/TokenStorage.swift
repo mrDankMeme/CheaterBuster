@@ -1,4 +1,10 @@
-// Infrastructure/Security/TokenStorage.swift
+//
+//  TokenStorage.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
 import Foundation
 
 protocol TokenStorage {
@@ -6,8 +12,3 @@ protocol TokenStorage {
     var userId: String? { get set }
 }
 
-final class InMemoryTokenStorage: TokenStorage {
-    var accessToken: String?
-    var userId: String?
-}
-// при желании быстро меняется на Keychain

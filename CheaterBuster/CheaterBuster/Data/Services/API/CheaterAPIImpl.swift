@@ -6,6 +6,7 @@
 //
 
 
+// Data/Services/API/CheaterAPIImpl.swift
 import Foundation
 
 final class CheaterAPIImpl: CheaterAPI {
@@ -23,17 +24,56 @@ final class CheaterAPIImpl: CheaterAPI {
         }
     }
 
-    // /api/task
-    func createAnalyzeTask(files: [MultipartFormData.FilePart], conversation: String?) async throws -> TaskReadDTO {
+    // MARK: - /api/task (files[], conversation?, app_bundle*, webhook_url?)
+    func createAnalyzeTask(
+        files: [MultipartFormData.FilePart],
+        conversation: String?
+    ) async throws -> TaskReadDTO {
         let url = cfg.baseURL.appendingPathComponent("/api/task")
         var req = URLRequest(url: url); req.httpMethod = "POST"
         authed(&req)
+
         let mp = MultipartFormData()
         let body = mp.build(fields: [
             "conversation": conversation,
             "app_bundle": cfg.bundleId,
-            "webhook_url": nil // если нужно — подставим позже
-        ], files: files)
+            "webhook_url": nil
+        ], files: files.map { part in
+            // поле должно называться "files" (массив), даже если один файл
+            MultipartFormData.FilePart(
+                name: "files",
+                filename: part.filename,
+                mimeType: part.mimeType,
+                data: part.data
+            )
+        })
+        req.setValue(mp.contentType, forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        return try await http.send(req)
+    }
+
+    // MARK: - /api/task/place (file, conversation?, app_bundle*, webhook_url?)
+    func createAnalyzePlaceTask(
+        file: MultipartFormData.FilePart,
+        conversation: String?
+    ) async throws -> TaskReadDTO {
+        let url = cfg.baseURL.appendingPathComponent("/api/task/place")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        authed(&req)
+
+        let mp = MultipartFormData()
+        // строго одно поле "file"
+        let one = MultipartFormData.FilePart(
+            name: "file",
+            filename: file.filename,
+            mimeType: file.mimeType,
+            data: file.data
+        )
+        let body = mp.build(fields: [
+            "conversation": conversation,
+            "app_bundle": cfg.bundleId,
+            "webhook_url": nil
+        ], files: [one])
         req.setValue(mp.contentType, forHTTPHeaderField: "Content-Type")
         req.httpBody = body
         return try await http.send(req)
@@ -46,13 +86,20 @@ final class CheaterAPIImpl: CheaterAPI {
         return try await http.send(req)
     }
 
-    // /api/search
+    // MARK: - Reverse search (без изменений в контракте)
     func createReverseSearch(image: MultipartFormData.FilePart) async throws -> ReverseSearchCreateResponse {
         let url = cfg.baseURL.appendingPathComponent("/api/search")
         var req = URLRequest(url: url); req.httpMethod = "POST"
         authed(&req)
         let mp = MultipartFormData()
-        let body = mp.build(fields: [:], files: [image])
+        let body = mp.build(fields: [:], files: [
+            MultipartFormData.FilePart(
+                name: "image",
+                filename: image.filename,
+                mimeType: image.mimeType,
+                data: image.data
+            )
+        ])
         req.setValue(mp.contentType, forHTTPHeaderField: "Content-Type")
         req.httpBody = body
         return try await http.send(req)

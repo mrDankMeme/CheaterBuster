@@ -6,7 +6,7 @@
 //
 
 
-// Data/API/URLSessionHTTPClient.swift
+
 import Foundation
 
 final class URLSessionHTTPClient: HTTPClient {
@@ -14,28 +14,40 @@ final class URLSessionHTTPClient: HTTPClient {
     init(session: URLSession = .shared) { self.session = session }
 
     func send<T: Decodable>(_ request: URLRequest) async throws -> T {
-        let (data, response): (Data, URLResponse)
+        var req = request
+        if req.value(forHTTPHeaderField: "Accept") == nil {
+            req.setValue("application/json", forHTTPHeaderField: "Accept")
+        }
+        let (data, resp): (Data, URLResponse)
         do {
-            (data, response) = try await session.data(for: request)
-        } catch { throw APIError.transport(error) }
-
-        guard let http = response as? HTTPURLResponse else { throw APIError.noData }
+            (data, resp) = try await session.data(for: req)
+        } catch {
+            throw APIError.transport(error)
+        }
+        guard let http = resp as? HTTPURLResponse else { throw APIError.noData }
         guard (200..<300).contains(http.statusCode) else {
             if http.statusCode == 401 { throw APIError.unauthorized }
-            throw APIError.http(http.statusCode, String(data: data, encoding: .utf8))
+            let body = String(data: data, encoding: .utf8)
+            throw APIError.http(http.statusCode, body)
         }
-
         do {
             return try JSONDecoder().decode(T.self, from: data)
-        } catch { throw APIError.decoding(error) }
+        } catch {
+            throw APIError.decoding(error)
+        }
     }
 
     func sendVoid(_ request: URLRequest) async throws {
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw APIError.noData }
+        var req = request
+        if req.value(forHTTPHeaderField: "Accept") == nil {
+            req.setValue("application/json", forHTTPHeaderField: "Accept")
+        }
+        let (data, resp) = try await session.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw APIError.noData }
         guard (200..<300).contains(http.statusCode) else {
             if http.statusCode == 401 { throw APIError.unauthorized }
-            throw APIError.http(http.statusCode, String(data: data, encoding: .utf8))
+            let body = String(data: data, encoding: .utf8)
+            throw APIError.http(http.statusCode, body)
         }
         _ = data
     }

@@ -1,4 +1,13 @@
-// Data/API/MultipartFormData.swift
+//
+//  MultipartFormData.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+// сборщик multipart-запросов
+
 import Foundation
 
 struct MultipartFormData {
@@ -8,10 +17,10 @@ struct MultipartFormData {
         let mimeType: String
         let data: Data
     }
-
+    
     private let boundary = "----CB-\(UUID().uuidString)"
     var contentType: String { "multipart/form-data; boundary=\(boundary)" }
-
+    
     func build(fields: [String: String?], files: [FilePart]) -> Data {
         var body = Data()
         for (k,v) in fields { guard let v else { continue }
@@ -29,4 +38,10 @@ struct MultipartFormData {
         return body
     }
 }
-private extension Data { mutating func append(_ s: String) { if let d = s.data(using: .utf8) { append(d) } } }
+private extension Data {
+    mutating func append(_ s: String) {
+        if let d = s.data(using: .utf8) {
+            append(d)
+        }
+    }
+}

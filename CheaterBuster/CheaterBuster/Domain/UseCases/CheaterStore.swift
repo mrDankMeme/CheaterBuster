@@ -6,10 +6,9 @@
 //
 
 
-
 import Foundation
 
-public protocol CheaterStore {
+protocol CheaterStore {
     func load() -> [CheaterRecord]
     func add(_ record: CheaterRecord)
     func clearAll()
