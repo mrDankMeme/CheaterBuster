@@ -65,6 +65,7 @@
 		A35FF3EF2EB24A090000E890 /* TaskCreateResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3EE2EB24A090000E890 /* TaskCreateResponse.swift */; };
 		A35FF3F12EB251950000E890 /* CheaterResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3F02EB251950000E890 /* CheaterResultView.swift */; };
 		A35FF3F32EB270B50000E890 /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3F22EB270B50000E890 /* AppRouter.swift */; };
+		A35FF3F72EB275CA0000E890 /* Notification+Names.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3F62EB275C10000E890 /* Notification+Names.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -126,6 +127,7 @@
 		A35FF3EE2EB24A090000E890 /* TaskCreateResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskCreateResponse.swift; sourceTree = "<group>"; };
 		A35FF3F02EB251950000E890 /* CheaterResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheaterResultView.swift; sourceTree = "<group>"; };
 		A35FF3F22EB270B50000E890 /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
+		A35FF3F62EB275C10000E890 /* Notification+Names.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Notification+Names.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -159,6 +161,7 @@
 		A35FF34A2EB005DD0000E890 /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				A35FF3F62EB275C10000E890 /* Notification+Names.swift */,
 				A35FF3A32EB10B200000E890 /* Corner+Helpers.swift */,
 				A35FF3772EB0D8B50000E890 /* Environment+Resolver.swift */,
 				A35FF3522EB005E10000E890 /* DesignSystem */,
@@ -512,6 +515,7 @@
 				A35FF3A22EB108C20000E890 /* SearchResultsView.swift in Sources */,
 				A35FF3592EB00CF10000E890 /* SearchField.swift in Sources */,
 				A35FF37A2EB0E6910000E890 /* ImageHit.swift in Sources */,
+				A35FF3F72EB275CA0000E890 /* Notification+Names.swift in Sources */,
 				A35FF3A42EB10B2C0000E890 /* Corner+Helpers.swift in Sources */,
 				A35FF3C02EB2257A0000E890 /* URLSessionHTTPClient.swift in Sources */,
 				A35FF3B12EB12DBE0000E890 /* CheaterStore.swift in Sources */,

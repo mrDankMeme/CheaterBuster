@@ -5,27 +5,25 @@
 //  Created by Niiaz Khasanov on 10/29/25.
 //
 
+
+
 import Foundation
 import Combine
 import UIKit
 
 final class HistoryViewModel: ObservableObject {
-    // MARK: Search-history
+
     @Published private(set) var items: [HistoryRecord] = []
-
-    // MARK: Cheater-history
     @Published private(set) var cheaterItems: [CheaterRecord] = []
-
     @Published var segment: Segment = .search
+
     enum Segment: Equatable { case search, cheater }
 
-    // Навигация/статусы для реплея поиска
     @Published private(set) var rerunResults: [ImageHit] = []
     @Published private(set) var isLoading = false
     @Published var errorText: String?
 
-    // Навигация в экран результата Cheater
-    @Published var selectedCheater: CheaterRecord?   // ← NEW
+    @Published var selectedCheater: CheaterRecord?
 
     private let store: HistoryStore
     private let cheaterStore: CheaterStore
@@ -46,14 +44,17 @@ final class HistoryViewModel: ObservableObject {
         cheaterItems = cheaterStore.load()
     }
 
-    // MARK: Search tab
     func clearSearch() {
         store.clearAll()
         items = []
     }
 
+    func clearCheater() {
+        cheaterStore.clearAll()
+        cheaterItems = []
+    }
+
     func onTapSearch(_ rec: HistoryRecord) {
-        // повтор поиска
         isLoading = true
         errorText = nil
 
@@ -80,14 +81,7 @@ final class HistoryViewModel: ObservableObject {
             .store(in: &bag)
     }
 
-    // MARK: Cheater tab
-    func clearCheater() {
-        cheaterStore.clearAll()
-        cheaterItems = []
-    }
-
     func onTapCheater(_ rec: CheaterRecord) {
-        // Навигация в детальный экран результата
         selectedCheater = rec
     }
 }

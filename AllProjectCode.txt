@@ -401,6 +401,20 @@ public extension View {
     }
 }
 //
+//  Notification+Names.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+import Foundation
+
+/// Centralized notification names used across modules.
+extension Notification.Name {
+    /// Sent when the user saves a cheater analysis and taps “Open History”.
+    static let openHistoryCheater = Notification.Name("openHistoryCheater")
+}
+//
 //  Environment+Resolver.swift
 //  CheaterBuster
 //
@@ -2290,22 +2304,18 @@ import Combine
 import UIKit
 
 final class HistoryViewModel: ObservableObject {
-    // MARK: Search-history
+
     @Published private(set) var items: [HistoryRecord] = []
-
-    // MARK: Cheater-history
     @Published private(set) var cheaterItems: [CheaterRecord] = []
-
     @Published var segment: Segment = .search
+
     enum Segment: Equatable { case search, cheater }
 
-    // Навигация/статусы для реплея поиска
     @Published private(set) var rerunResults: [ImageHit] = []
     @Published private(set) var isLoading = false
     @Published var errorText: String?
 
-    // Навигация в экран результата Cheater
-    @Published var selectedCheater: CheaterRecord?   // ← NEW
+    @Published var selectedCheater: CheaterRecord?
 
     private let store: HistoryStore
     private let cheaterStore: CheaterStore
@@ -2318,7 +2328,16 @@ final class HistoryViewModel: ObservableObject {
         self.store = store
         self.cheaterStore = cheaterStore
         self.search = search
+
         reload()
+
+        // 🧭 React to "openHistoryCheater" notification.
+        NotificationCenter.default.publisher(for: .openHistoryCheater)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.segment = .cheater
+            }
+            .store(in: &bag)
     }
 
     func reload() {
@@ -2326,14 +2345,17 @@ final class HistoryViewModel: ObservableObject {
         cheaterItems = cheaterStore.load()
     }
 
-    // MARK: Search tab
     func clearSearch() {
         store.clearAll()
         items = []
     }
 
+    func clearCheater() {
+        cheaterStore.clearAll()
+        cheaterItems = []
+    }
+
     func onTapSearch(_ rec: HistoryRecord) {
-        // повтор поиска
         isLoading = true
         errorText = nil
 
@@ -2360,14 +2382,7 @@ final class HistoryViewModel: ObservableObject {
             .store(in: &bag)
     }
 
-    // MARK: Cheater tab
-    func clearCheater() {
-        cheaterStore.clearAll()
-        cheaterItems = []
-    }
-
     func onTapCheater(_ rec: CheaterRecord) {
-        // Навигация в детальный экран результата
         selectedCheater = rec
     }
 }
@@ -2688,10 +2703,10 @@ struct CheaterView: View {
     // Document picker
     @State private var showFilePicker = false
 
-    // (опционально) сопроводительный текст переписки
+    // Optional text conversation
     @State private var conversationText: String = ""
 
-    // E8: алерт после сохранения
+    // Alert after saving
     @State private var showSavedAlert = false
 
     init(vm: CheaterViewModel) {
@@ -2707,17 +2722,30 @@ struct CheaterView: View {
         .background(Tokens.Color.backgroundMain.ignoresSafeArea())
         .navigationTitle("Cheater")
 
-        // Picker'ы
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
+        // MARK: Pickers
+        .photosPicker(isPresented: $showPhotoPicker,
+                      selection: $photoItem,
+                      matching: .images)
+
         .fileImporter(
             isPresented: $showFilePicker,
             allowedContentTypes: [.pdf, .png, .jpeg, .plainText],
             allowsMultipleSelection: false
         ) { result in
-            if case .success(let urls) = result,
-               let url = urls.first,
-               let data = try? Data(contentsOf: url) {
-                vm.showFile(name: url.lastPathComponent, data: data)
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                let secured = url.startAccessingSecurityScopedResource()
+                defer { if secured { url.stopAccessingSecurityScopedResource() } }
+                do {
+                    let data = try Data(contentsOf: url)
+                    vm.showFile(name: url.lastPathComponent, data: data)
+                } catch {
+                    vm.presentError("Failed to read file: \(error.localizedDescription)")
+                }
+
+            case .failure(let error):
+                vm.presentError(error.localizedDescription)
             }
         }
 
@@ -2725,14 +2753,16 @@ struct CheaterView: View {
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self),
-                   let img = UIImage(data: data) {
+                   let img  = UIImage(data: data) {
                     await MainActor.run { vm.showImage(img) }
+                } else {
+                    await MainActor.run { vm.presentError("Failed to load photo") }
                 }
                 await MainActor.run { photoItem = nil }
             }
         }
 
-        // E8: автопереход на History после сохранения
+        // MARK: - Save Alert
         .onChange(of: vm.didSave) { _, saved in
             guard saved else { return }
             showSavedAlert = true
@@ -2740,37 +2770,34 @@ struct CheaterView: View {
         .alert("Saved to History", isPresented: $showSavedAlert) {
             Button("Open History") {
                 router.tab = .history
+                NotificationCenter.default.post(name: .openHistoryCheater, object: nil)
             }
             Button("OK", role: .cancel) { }
         }
     }
 
-    // MARK: - Секции по состояниям
+    // MARK: - Content
 
     @ViewBuilder
     private var content: some View {
         switch vm.state {
         case .idle:
             idleView
-
         case .previewImage(let img):
             imagePreview(img)
-
         case .previewFile(let name, _):
             filePreview(name: name)
-
         case .uploading(let p):
             uploadingView(progress: p)
-
         case .result(let r):
             resultView(r)
-
         case .error(let msg):
             errorView(msg)
         }
     }
 
-    // Idle
+    // MARK: - Subviews
+
     private var idleView: some View {
         VStack(spacing: Tokens.Spacing.x24) {
             VStack(spacing: Tokens.Spacing.x8) {
@@ -2791,7 +2818,6 @@ struct CheaterView: View {
         }
     }
 
-    // Image preview
     private func imagePreview(_ img: UIImage) -> some View {
         VStack(spacing: Tokens.Spacing.x16) {
             ScrollView {
@@ -2815,7 +2841,6 @@ struct CheaterView: View {
         }
     }
 
-    // File preview
     private func filePreview(name: String) -> some View {
         VStack(spacing: Tokens.Spacing.x16) {
             VStack(spacing: Tokens.Spacing.x12) {
@@ -2840,7 +2865,6 @@ struct CheaterView: View {
         }
     }
 
-    // Uploading
     private func uploadingView(progress p: Int) -> some View {
         VStack(spacing: Tokens.Spacing.x16) {
             ProgressView(value: Double(p), total: 100)
@@ -2852,7 +2876,6 @@ struct CheaterView: View {
         }
     }
 
-    // Result (E8: кнопки Save / Share)
     private func resultView(_ r: TaskResult) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.x16) {
             Text("Risk analysis complete ✅")
@@ -2877,10 +2900,7 @@ struct CheaterView: View {
             Text("Recommendations").font(Tokens.Font.subtitle)
             ForEach(r.recommendations, id: \.self) { Text("• \($0)") }
 
-            // --- E8 CTA ---
-            PrimaryButton("Save to History") {
-                vm.saveToHistory()
-            }
+            PrimaryButton("Save to History") { vm.saveToHistory() }
 
             ShareLink(item: shareText(for: r)) {
                 Text("Share")
@@ -2893,7 +2913,6 @@ struct CheaterView: View {
                         in: RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
                     )
             }
-            // ---------------
 
             Button("Select another") { showSourceActionSheet() }
                 .font(Tokens.Font.body)
@@ -2904,7 +2923,6 @@ struct CheaterView: View {
         }
     }
 
-    // Error
     private func errorView(_ msg: String) -> some View {
         VStack(spacing: Tokens.Spacing.x16) {
             Text(msg)
@@ -2913,7 +2931,6 @@ struct CheaterView: View {
                 .multilineTextAlignment(.center)
 
             PrimaryButton("Try again") { showSourceActionSheet() }
-
             Spacer(minLength: 0)
         }
     }
@@ -3088,6 +3105,9 @@ final class CheaterViewModel: ObservableObject {
     func showImage(_ image: UIImage) { state = .previewImage(image) }
     func showFile(name: String, data: Data) { state = .previewFile(name: name, data: data) }
 
+    /// Публичный метод, чтобы экран мог показать ошибку, не трогая `state` напрямую.
+    func presentError(_ message: String) { state = .error(message) }
+
     /// Старт анализа, теперь **не** сохраняем авто в историю — ждём явного Save.
     func analyseCurrent(conversation: String? = nil, apphudId: String) {
         Task {
@@ -3110,7 +3130,7 @@ final class CheaterViewModel: ObservableObject {
                     break
                 }
             } catch {
-                state = .error((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+                presentError((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
             }
         }
     }
@@ -3153,16 +3173,16 @@ final class CheaterViewModel: ObservableObject {
                 lastResult = r
                 state = .result(r)
             } else if case .message(let msg)? = final.result {
-                state = .error(msg)
+                presentError(msg)
             } else {
-                state = .error("Empty result")
+                presentError("Empty result")
             }
 
         case .failed:
-            state = .error(final.error ?? "Analysis failed")
+            presentError(final.error ?? "Analysis failed")
 
         default:
-            state = .error("Unexpected status: \(final.status)")
+            presentError("Unexpected status: \(final.status)")
         }
     }
 

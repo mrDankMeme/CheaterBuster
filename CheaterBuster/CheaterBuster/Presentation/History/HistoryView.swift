@@ -10,6 +10,7 @@ import UIKit
 
 struct HistoryView: View {
     @StateObject private var vm: HistoryViewModel
+    @EnvironmentObject private var router: AppRouter
     @State private var goResults = false
 
     // Важно: init для @StateObject, когда VM приходит из DI
@@ -22,7 +23,14 @@ struct HistoryView: View {
             content
                 .background(Tokens.Color.backgroundMain.ignoresSafeArea())
                 .navigationBarTitleDisplayMode(.inline)
-                .onAppear { vm.reload() }
+                .onAppear {
+                    vm.reload()
+                    // При входе во вкладку — выставляем нужный сегмент из роутера.
+                    vm.segment = router.historyPreferredSegment
+                }
+                .onChange(of: router.historyPreferredSegment) { _, seg in
+                    vm.segment = seg
+                }
                 .onChange(of: vm.rerunResults) { _, hits in
                     if !hits.isEmpty { goResults = true }
                 }
@@ -51,7 +59,6 @@ struct HistoryView: View {
             .padding(.horizontal, Tokens.Spacing.x16)
             .padding(.top, Tokens.Spacing.x16)
 
-            // Твой компонент сегмента — оставляю имя, которое у тебя в проекте
             SegmentCapsule(selected: $vm.segment)
                 .padding(.horizontal, Tokens.Spacing.x16)
                 .padding(.top, Tokens.Spacing.x12)
@@ -92,6 +99,22 @@ struct HistoryView: View {
         .padding(.top, Tokens.Spacing.x8)
     }
 }
+
+
+    @ViewBuilder
+    private func topBarClear(isHidden: Bool, action: @escaping () -> Void) -> some View {
+        HStack {
+            Spacer()
+            if !isHidden {
+                Button("Clear") { action() }
+                    .font(Tokens.Font.caption)
+                    .foregroundStyle(Tokens.Color.accent)
+            }
+        }
+        .padding(.horizontal, Tokens.Spacing.x16)
+        .padding(.top, Tokens.Spacing.x8)
+    }
+
 
 // MARK: - Search list (исправлено под HistoryRecord)
 

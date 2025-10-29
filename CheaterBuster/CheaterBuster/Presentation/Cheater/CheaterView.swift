@@ -5,6 +5,8 @@
 //  Created by Niiaz Khasanov on 10/28/25.
 //
 
+
+
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
@@ -20,10 +22,10 @@ struct CheaterView: View {
     // Document picker
     @State private var showFilePicker = false
 
-    // (опционально) сопроводительный текст переписки
+    // Optional text conversation
     @State private var conversationText: String = ""
 
-    // E8: алерт после сохранения
+    // Alert after saving
     @State private var showSavedAlert = false
 
     init(vm: CheaterViewModel) {
@@ -39,8 +41,10 @@ struct CheaterView: View {
         .background(Tokens.Color.backgroundMain.ignoresSafeArea())
         .navigationTitle("Cheater")
 
-        // ---- Pickers ----
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
+        // MARK: Pickers
+        .photosPicker(isPresented: $showPhotoPicker,
+                      selection: $photoItem,
+                      matching: .images)
 
         .fileImporter(
             isPresented: $showFilePicker,
@@ -50,7 +54,6 @@ struct CheaterView: View {
             switch result {
             case .success(let urls):
                 guard let url = urls.first else { return }
-                // Важно: security-scoped доступ
                 let secured = url.startAccessingSecurityScopedResource()
                 defer { if secured { url.stopAccessingSecurityScopedResource() } }
                 do {
@@ -78,43 +81,42 @@ struct CheaterView: View {
             }
         }
 
-        // ---- E8: алерт и переход на History после сохранения ----
+        // MARK: - Save Alert
         .onChange(of: vm.didSave) { _, saved in
             guard saved else { return }
             showSavedAlert = true
         }
         .alert("Saved to History", isPresented: $showSavedAlert) {
-            Button("Open History") { router.tab = .history }
+            Button("Open History") {
+                // Детеминированная навигация через роутер:
+                router.openHistoryCheater()
+            }
             Button("OK", role: .cancel) { }
         }
     }
 
-    // MARK: - Секции по состояниям
+    // MARK: - Content
 
     @ViewBuilder
     private var content: some View {
         switch vm.state {
         case .idle:
             idleView
-
         case .previewImage(let img):
             imagePreview(img)
-
         case .previewFile(let name, _):
             filePreview(name: name)
-
         case .uploading(let p):
             uploadingView(progress: p)
-
         case .result(let r):
             resultView(r)
-
         case .error(let msg):
             errorView(msg)
         }
     }
 
-    // Idle
+    // MARK: - Subviews (без изменений ниже)
+
     private var idleView: some View {
         VStack(spacing: Tokens.Spacing.x24) {
             VStack(spacing: Tokens.Spacing.x8) {
@@ -135,7 +137,6 @@ struct CheaterView: View {
         }
     }
 
-    // Image preview
     private func imagePreview(_ img: UIImage) -> some View {
         VStack(spacing: Tokens.Spacing.x16) {
             ScrollView {
@@ -159,7 +160,6 @@ struct CheaterView: View {
         }
     }
 
-    // File preview
     private func filePreview(name: String) -> some View {
         VStack(spacing: Tokens.Spacing.x16) {
             VStack(spacing: Tokens.Spacing.x12) {
@@ -184,7 +184,6 @@ struct CheaterView: View {
         }
     }
 
-    // Uploading
     private func uploadingView(progress p: Int) -> some View {
         VStack(spacing: Tokens.Spacing.x16) {
             ProgressView(value: Double(p), total: 100)
@@ -196,7 +195,6 @@ struct CheaterView: View {
         }
     }
 
-    // Result (E8: кнопки Save / Share)
     private func resultView(_ r: TaskResult) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.x16) {
             Text("Risk analysis complete ✅")
@@ -221,10 +219,7 @@ struct CheaterView: View {
             Text("Recommendations").font(Tokens.Font.subtitle)
             ForEach(r.recommendations, id: \.self) { Text("• \($0)") }
 
-            // --- E8 CTA ---
-            PrimaryButton("Save to History") {
-                vm.saveToHistory()
-            }
+            PrimaryButton("Save to History") { vm.saveToHistory() }
 
             ShareLink(item: shareText(for: r)) {
                 Text("Share")
@@ -237,7 +232,6 @@ struct CheaterView: View {
                         in: RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
                     )
             }
-            // ---------------
 
             Button("Select another") { showSourceActionSheet() }
                 .font(Tokens.Font.body)
@@ -248,7 +242,6 @@ struct CheaterView: View {
         }
     }
 
-    // Error
     private func errorView(_ msg: String) -> some View {
         VStack(spacing: Tokens.Spacing.x16) {
             Text(msg)
@@ -257,12 +250,9 @@ struct CheaterView: View {
                 .multilineTextAlignment(.center)
 
             PrimaryButton("Try again") { showSourceActionSheet() }
-
             Spacer(minLength: 0)
         }
     }
-
-    // MARK: - Helpers
 
     private func riskLevelText(_ score: Int) -> String {
         switch score {
@@ -282,7 +272,6 @@ struct CheaterView: View {
     }
 
     private func showSourceActionSheet() {
-        // пока просто повторно открываем фотопикер
         showPhotoPicker = true
     }
 }
