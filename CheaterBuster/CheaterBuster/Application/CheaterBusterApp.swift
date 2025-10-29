@@ -14,6 +14,9 @@ struct CheaterBusterApp: App {
     private let assembler = AppAssembler.make()
     private var resolver: Resolver { assembler.resolver }
 
+    // получаем роутер из DI
+    private var router: AppRouter { resolver.resolve(AppRouter.self)! }
+
     init() {
         DevSeed.run(resolver)
     }
@@ -22,6 +25,7 @@ struct CheaterBusterApp: App {
         WindowGroup {
             RootTabView()
                 .environment(\.resolver, resolver)
+                .environmentObject(router)
         }
     }
 }

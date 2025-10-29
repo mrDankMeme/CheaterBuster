@@ -64,6 +64,7 @@
 		A35FF3E92EB232AC0000E890 /* InMemoryTokenStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3E82EB232AC0000E890 /* InMemoryTokenStorage.swift */; };
 		A35FF3EF2EB24A090000E890 /* TaskCreateResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3EE2EB24A090000E890 /* TaskCreateResponse.swift */; };
 		A35FF3F12EB251950000E890 /* CheaterResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3F02EB251950000E890 /* CheaterResultView.swift */; };
+		A35FF3F32EB270B50000E890 /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3F22EB270B50000E890 /* AppRouter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -124,6 +125,7 @@
 		A35FF3E82EB232AC0000E890 /* InMemoryTokenStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryTokenStorage.swift; sourceTree = "<group>"; };
 		A35FF3EE2EB24A090000E890 /* TaskCreateResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskCreateResponse.swift; sourceTree = "<group>"; };
 		A35FF3F02EB251950000E890 /* CheaterResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheaterResultView.swift; sourceTree = "<group>"; };
+		A35FF3F22EB270B50000E890 /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -200,6 +202,7 @@
 		A35FF35A2EB0CDF10000E890 /* Application */ = {
 			isa = PBXGroup;
 			children = (
+				A35FF3F22EB270B50000E890 /* AppRouter.swift */,
 				A35FF3B22EB12F980000E890 /* DevSeed.swift */,
 				A35FF34C2EB005DD0000E890 /* CheaterBusterApp.swift */,
 				A35FF3972EB104760000E890 /* RootTabView.swift */,
@@ -497,6 +500,7 @@
 				A35FF3C22EB225B70000E890 /* MultipartFormData.swift in Sources */,
 				A35FF38C2EB0F1090000E890 /* SettingsStoreImpl.swift in Sources */,
 				A35FF3EF2EB24A090000E890 /* TaskCreateResponse.swift in Sources */,
+				A35FF3F32EB270B50000E890 /* AppRouter.swift in Sources */,
 				A35FF3E92EB232AC0000E890 /* InMemoryTokenStorage.swift in Sources */,
 				A35FF3502EB005DD0000E890 /* CheaterBusterApp.swift in Sources */,
 				A35FF3712EB0D3330000E890 /* SettingsScreen.swift in Sources */,

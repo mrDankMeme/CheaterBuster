@@ -5,7 +5,6 @@
 //  Created by Niiaz Khasanov on 10/28/25.
 //
 
-
 import Foundation
 import Swinject
 
@@ -14,20 +13,19 @@ final class ServicesAssembly: Assembly {
 
         // MARK: Infrastructure
         container.register(APIConfig.self) { _ in
-            // Подставь свой prod/dev URL
             APIConfig(baseURL: URL(string: "https://cheaterbuster.webberapp.shop")!)
         }
         .inObjectScope(.container)
 
-        container.register(TokenStorage.self) { _ in
-            InMemoryTokenStorage()
-        }
-        .inObjectScope(.container)
+        container.register(TokenStorage.self) { _ in InMemoryTokenStorage() }
+            .inObjectScope(.container)
 
-        container.register(HTTPClient.self) { _ in
-            URLSessionHTTPClient()
-        }
-        .inObjectScope(.container)
+        container.register(HTTPClient.self) { _ in URLSessionHTTPClient() }
+            .inObjectScope(.container)
+
+        // MARK: App router
+        container.register(AppRouter.self) { _ in AppRouter() }
+            .inObjectScope(.container)
 
         // MARK: Domain / Auth
         container.register(AuthRepository.self) { r in

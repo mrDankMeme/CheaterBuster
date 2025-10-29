@@ -1,11 +1,9 @@
 //
-//  CheaterScreen.swift
+//  CheaterView.swift
 //  CheaterBuster
 //
 //  Created by Niiaz Khasanov on 10/28/25.
 //
-
-
 
 import SwiftUI
 import PhotosUI
@@ -13,6 +11,7 @@ import UniformTypeIdentifiers
 
 struct CheaterView: View {
     @ObservedObject var vm: CheaterViewModel
+    @EnvironmentObject private var router: AppRouter
 
     // PhotosPicker
     @State private var photoItem: PhotosPickerItem?
@@ -23,6 +22,9 @@ struct CheaterView: View {
 
     // (опционально) сопроводительный текст переписки
     @State private var conversationText: String = ""
+
+    // E8: алерт после сохранения
+    @State private var showSavedAlert = false
 
     init(vm: CheaterViewModel) {
         self.vm = vm
@@ -37,14 +39,8 @@ struct CheaterView: View {
         .background(Tokens.Color.backgroundMain.ignoresSafeArea())
         .navigationTitle("Cheater")
 
-        // 🔹 Нормальный способ показать PhotosPicker
-        .photosPicker(
-            isPresented: $showPhotoPicker,
-            selection: $photoItem,
-            matching: .images
-        )
-
-        // 🔹 Встроенный файловый импортер
+        // Picker'ы
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
         .fileImporter(
             isPresented: $showFilePicker,
             allowedContentTypes: [.pdf, .png, .jpeg, .plainText],
@@ -57,7 +53,6 @@ struct CheaterView: View {
             }
         }
 
-        // Когда пользователь выбрал фото — грузим его и шлём во VM
         .onChange(of: photoItem) { item in
             guard let item else { return }
             Task {
@@ -65,9 +60,20 @@ struct CheaterView: View {
                    let img = UIImage(data: data) {
                     await MainActor.run { vm.showImage(img) }
                 }
-                // Сброс, чтобы можно было выбрать тот же файл снова
                 await MainActor.run { photoItem = nil }
             }
+        }
+
+        // E8: автопереход на History после сохранения
+        .onChange(of: vm.didSave) { _, saved in
+            guard saved else { return }
+            showSavedAlert = true
+        }
+        .alert("Saved to History", isPresented: $showSavedAlert) {
+            Button("Open History") {
+                router.tab = .history
+            }
+            Button("OK", role: .cancel) { }
         }
     }
 
@@ -178,7 +184,7 @@ struct CheaterView: View {
         }
     }
 
-    // Result
+    // Result (E8: кнопки Save / Share)
     private func resultView(_ r: TaskResult) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.x16) {
             Text("Risk analysis complete ✅")
@@ -203,8 +209,28 @@ struct CheaterView: View {
             Text("Recommendations").font(Tokens.Font.subtitle)
             ForEach(r.recommendations, id: \.self) { Text("• \($0)") }
 
-            PrimaryButton("Select another") { showSourceActionSheet() }
-                .padding(.top, Tokens.Spacing.x16)
+            // --- E8 CTA ---
+            PrimaryButton("Save to History") {
+                vm.saveToHistory()
+            }
+
+            ShareLink(item: shareText(for: r)) {
+                Text("Share")
+                    .font(Tokens.Font.caption)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        Tokens.Color.accent,
+                        in: RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
+                    )
+            }
+            // ---------------
+
+            Button("Select another") { showSourceActionSheet() }
+                .font(Tokens.Font.body)
+                .foregroundColor(Tokens.Color.textSecondary)
+                .padding(.top, Tokens.Spacing.x8)
 
             Spacer(minLength: 0)
         }
@@ -234,10 +260,16 @@ struct CheaterView: View {
         }
     }
 
+    private func shareText(for r: TaskResult) -> String {
+        """
+        CheaterBuster — analysis result:
+        Risk: \(r.risk_score)%
+        Red flags: \(r.red_flags.joined(separator: "; "))
+        Recommendations: \(r.recommendations.joined(separator: "; "))
+        """
+    }
+
     private func showSourceActionSheet() {
-        // Просто показываем оба пикера как отдельные действия
-        // (если хочешь actionSheet — можно собрать через .confirmationDialog)
         showPhotoPicker = true
-        // или, если нужно меню выбора — раскомментируй confirmationDialog ниже
     }
 }

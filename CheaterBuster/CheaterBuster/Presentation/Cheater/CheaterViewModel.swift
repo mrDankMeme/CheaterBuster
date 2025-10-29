@@ -5,7 +5,6 @@
 //  Created by Niiaz Khasanov on 10/28/25.
 //
 
-
 import Foundation
 import UIKit
 import Combine
@@ -24,6 +23,13 @@ final class CheaterViewModel: ObservableObject {
 
     @Published private(set) var state: State = .idle
 
+    // E8: храним последний результат (для Save/Share)
+    private var lastKind: CheaterRecord.Kind?
+    private var lastResult: TaskResult?
+
+    // Сигнал «сохранено» для экрана (для перехода на History)
+    @Published private(set) var didSave: Bool = false
+
     private let auth: AuthRepository
     private let api: CheaterAPI
     private let poller: TaskPoller
@@ -37,6 +43,7 @@ final class CheaterViewModel: ObservableObject {
     func showImage(_ image: UIImage) { state = .previewImage(image) }
     func showFile(name: String, data: Data) { state = .previewFile(name: name, data: data) }
 
+    /// Старт анализа, теперь **не** сохраняем авто в историю — ждём явного Save.
     func analyseCurrent(conversation: String? = nil, apphudId: String) {
         Task {
             do {
@@ -63,12 +70,25 @@ final class CheaterViewModel: ObservableObject {
         }
     }
 
+    /// Явное сохранение результата анализа в историю.
+    func saveToHistory(note: String? = "AI risk analysis") {
+        guard let kind = lastKind, let r = lastResult else { return }
+        store.add(.init(
+            date: Date(),
+            kind: kind,
+            riskScore: r.risk_score,
+            note: note,
+            redFlags: r.red_flags,
+            recommendations: r.recommendations
+        ))
+        didSave = true
+    }
+
     // MARK: - Private
 
     private func runTask(files: [MultipartFormData.FilePart], conversation: String?, kind: CheaterRecord.Kind) async throws {
         state = .uploading(progress: 10)
 
-        // По докам POST /api/task возвращает TaskReadDTO с id+status
         let created = try await api.createAnalyzeTask(files: files, conversation: conversation)
         state = .uploading(progress: 35)
 
@@ -83,12 +103,9 @@ final class CheaterViewModel: ObservableObject {
         switch final.status {
         case .finished:
             if case .details(let r)? = final.result {
-                store.add(.init(date: Date(),
-                                kind: kind,
-                                riskScore: r.risk_score,
-                                note: "AI risk analysis",
-                                redFlags: r.red_flags,
-                                recommendations: r.recommendations))
+                // E8: не сохраняем автоматически — показываем пользователю, а затем Save.
+                lastKind = kind
+                lastResult = r
                 state = .result(r)
             } else if case .message(let msg)? = final.result {
                 state = .error(msg)
