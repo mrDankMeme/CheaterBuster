@@ -43,6 +43,9 @@ final class CheaterViewModel: ObservableObject {
     func showImage(_ image: UIImage) { state = .previewImage(image) }
     func showFile(name: String, data: Data) { state = .previewFile(name: name, data: data) }
 
+    /// Публичный метод, чтобы экран мог показать ошибку, не трогая `state` напрямую.
+    func presentError(_ message: String) { state = .error(message) }
+
     /// Старт анализа, теперь **не** сохраняем авто в историю — ждём явного Save.
     func analyseCurrent(conversation: String? = nil, apphudId: String) {
         Task {
@@ -65,7 +68,7 @@ final class CheaterViewModel: ObservableObject {
                     break
                 }
             } catch {
-                state = .error((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+                presentError((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
             }
         }
     }
@@ -108,16 +111,16 @@ final class CheaterViewModel: ObservableObject {
                 lastResult = r
                 state = .result(r)
             } else if case .message(let msg)? = final.result {
-                state = .error(msg)
+                presentError(msg)
             } else {
-                state = .error("Empty result")
+                presentError("Empty result")
             }
 
         case .failed:
-            state = .error(final.error ?? "Analysis failed")
+            presentError(final.error ?? "Analysis failed")
 
         default:
-            state = .error("Unexpected status: \(final.status)")
+            presentError("Unexpected status: \(final.status)")
         }
     }
 

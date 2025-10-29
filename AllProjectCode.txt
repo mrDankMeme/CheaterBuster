@@ -486,6 +486,9 @@ struct CheaterBusterApp: App {
     private let assembler = AppAssembler.make()
     private var resolver: Resolver { assembler.resolver }
 
+    // получаем роутер из DI
+    private var router: AppRouter { resolver.resolve(AppRouter.self)! }
+
     init() {
         DevSeed.run(resolver)
     }
@@ -494,8 +497,24 @@ struct CheaterBusterApp: App {
         WindowGroup {
             RootTabView()
                 .environment(\.resolver, resolver)
+                .environmentObject(router)
         }
     }
+}
+//
+//  AppRouter.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+import Foundation
+import Combine
+
+/// Простой роутер уровня приложения: выбранная вкладка.
+final class AppRouter: ObservableObject {
+    enum Tab: Hashable { case search, cheater, history, settings }
+    @Published var tab: Tab = .search
 }
 //
 //  Services+VMAssembly.swift
@@ -503,7 +522,6 @@ struct CheaterBusterApp: App {
 //
 //  Created by Niiaz Khasanov on 10/28/25.
 //
-
 
 import Foundation
 import Swinject
@@ -513,20 +531,19 @@ final class ServicesAssembly: Assembly {
 
         // MARK: Infrastructure
         container.register(APIConfig.self) { _ in
-            // Подставь свой prod/dev URL
             APIConfig(baseURL: URL(string: "https://cheaterbuster.webberapp.shop")!)
         }
         .inObjectScope(.container)
 
-        container.register(TokenStorage.self) { _ in
-            InMemoryTokenStorage()
-        }
-        .inObjectScope(.container)
+        container.register(TokenStorage.self) { _ in InMemoryTokenStorage() }
+            .inObjectScope(.container)
 
-        container.register(HTTPClient.self) { _ in
-            URLSessionHTTPClient()
-        }
-        .inObjectScope(.container)
+        container.register(HTTPClient.self) { _ in URLSessionHTTPClient() }
+            .inObjectScope(.container)
+
+        // MARK: App router
+        container.register(AppRouter.self) { _ in AppRouter() }
+            .inObjectScope(.container)
 
         // MARK: Domain / Auth
         container.register(AuthRepository.self) { r in
@@ -605,28 +622,30 @@ final class ServicesAssembly: Assembly {
 //  Created by Niiaz Khasanov on 10/28/25.
 //
 
-
-
 import SwiftUI
 import Swinject
 
 struct RootTabView: View {
     @Environment(\.resolver) private var resolver
+    @EnvironmentObject private var router: AppRouter
 
     var body: some View {
-        TabView {
+        TabView(selection: $router.tab) {
             SearchScreen(vm: resolver.resolve(SearchViewModel.self)!)
                 .tabItem { Label("Search", systemImage: "magnifyingglass") }
+                .tag(AppRouter.Tab.search)
 
-            // Был CheaterScreen(), но реальный тип — CheaterView
             CheaterView(vm: resolver.resolve(CheaterViewModel.self)!)
                 .tabItem { Label("Cheater", systemImage: "person.crop.circle.badge.exclamationmark") }
+                .tag(AppRouter.Tab.cheater)
 
             HistoryView(vm: resolver.resolve(HistoryViewModel.self)!)
                 .tabItem { Label("History", systemImage: "clock") }
+                .tag(AppRouter.Tab.history)
 
             SettingsScreen()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
+                .tag(AppRouter.Tab.settings)
         }
     }
 }
@@ -2648,13 +2667,11 @@ private struct SegmentCapsule: View {
     }
 }
 //
-//  CheaterScreen.swift
+//  CheaterView.swift
 //  CheaterBuster
 //
 //  Created by Niiaz Khasanov on 10/28/25.
 //
-
-
 
 import SwiftUI
 import PhotosUI
@@ -2662,6 +2679,7 @@ import UniformTypeIdentifiers
 
 struct CheaterView: View {
     @ObservedObject var vm: CheaterViewModel
+    @EnvironmentObject private var router: AppRouter
 
     // PhotosPicker
     @State private var photoItem: PhotosPickerItem?
@@ -2672,6 +2690,9 @@ struct CheaterView: View {
 
     // (опционально) сопроводительный текст переписки
     @State private var conversationText: String = ""
+
+    // E8: алерт после сохранения
+    @State private var showSavedAlert = false
 
     init(vm: CheaterViewModel) {
         self.vm = vm
@@ -2686,14 +2707,8 @@ struct CheaterView: View {
         .background(Tokens.Color.backgroundMain.ignoresSafeArea())
         .navigationTitle("Cheater")
 
-        // 🔹 Нормальный способ показать PhotosPicker
-        .photosPicker(
-            isPresented: $showPhotoPicker,
-            selection: $photoItem,
-            matching: .images
-        )
-
-        // 🔹 Встроенный файловый импортер
+        // Picker'ы
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
         .fileImporter(
             isPresented: $showFilePicker,
             allowedContentTypes: [.pdf, .png, .jpeg, .plainText],
@@ -2706,7 +2721,6 @@ struct CheaterView: View {
             }
         }
 
-        // Когда пользователь выбрал фото — грузим его и шлём во VM
         .onChange(of: photoItem) { item in
             guard let item else { return }
             Task {
@@ -2714,9 +2728,20 @@ struct CheaterView: View {
                    let img = UIImage(data: data) {
                     await MainActor.run { vm.showImage(img) }
                 }
-                // Сброс, чтобы можно было выбрать тот же файл снова
                 await MainActor.run { photoItem = nil }
             }
+        }
+
+        // E8: автопереход на History после сохранения
+        .onChange(of: vm.didSave) { _, saved in
+            guard saved else { return }
+            showSavedAlert = true
+        }
+        .alert("Saved to History", isPresented: $showSavedAlert) {
+            Button("Open History") {
+                router.tab = .history
+            }
+            Button("OK", role: .cancel) { }
         }
     }
 
@@ -2827,7 +2852,7 @@ struct CheaterView: View {
         }
     }
 
-    // Result
+    // Result (E8: кнопки Save / Share)
     private func resultView(_ r: TaskResult) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.x16) {
             Text("Risk analysis complete ✅")
@@ -2852,8 +2877,28 @@ struct CheaterView: View {
             Text("Recommendations").font(Tokens.Font.subtitle)
             ForEach(r.recommendations, id: \.self) { Text("• \($0)") }
 
-            PrimaryButton("Select another") { showSourceActionSheet() }
-                .padding(.top, Tokens.Spacing.x16)
+            // --- E8 CTA ---
+            PrimaryButton("Save to History") {
+                vm.saveToHistory()
+            }
+
+            ShareLink(item: shareText(for: r)) {
+                Text("Share")
+                    .font(Tokens.Font.caption)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        Tokens.Color.accent,
+                        in: RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
+                    )
+            }
+            // ---------------
+
+            Button("Select another") { showSourceActionSheet() }
+                .font(Tokens.Font.body)
+                .foregroundColor(Tokens.Color.textSecondary)
+                .padding(.top, Tokens.Spacing.x8)
 
             Spacer(minLength: 0)
         }
@@ -2883,11 +2928,17 @@ struct CheaterView: View {
         }
     }
 
+    private func shareText(for r: TaskResult) -> String {
+        """
+        CheaterBuster — analysis result:
+        Risk: \(r.risk_score)%
+        Red flags: \(r.red_flags.joined(separator: "; "))
+        Recommendations: \(r.recommendations.joined(separator: "; "))
+        """
+    }
+
     private func showSourceActionSheet() {
-        // Просто показываем оба пикера как отдельные действия
-        // (если хочешь actionSheet — можно собрать через .confirmationDialog)
         showPhotoPicker = true
-        // или, если нужно меню выбора — раскомментируй confirmationDialog ниже
     }
 }
 //
@@ -2999,7 +3050,6 @@ struct CheaterResultView: View {
 //  Created by Niiaz Khasanov on 10/28/25.
 //
 
-
 import Foundation
 import UIKit
 import Combine
@@ -3018,6 +3068,13 @@ final class CheaterViewModel: ObservableObject {
 
     @Published private(set) var state: State = .idle
 
+    // E8: храним последний результат (для Save/Share)
+    private var lastKind: CheaterRecord.Kind?
+    private var lastResult: TaskResult?
+
+    // Сигнал «сохранено» для экрана (для перехода на History)
+    @Published private(set) var didSave: Bool = false
+
     private let auth: AuthRepository
     private let api: CheaterAPI
     private let poller: TaskPoller
@@ -3031,6 +3088,7 @@ final class CheaterViewModel: ObservableObject {
     func showImage(_ image: UIImage) { state = .previewImage(image) }
     func showFile(name: String, data: Data) { state = .previewFile(name: name, data: data) }
 
+    /// Старт анализа, теперь **не** сохраняем авто в историю — ждём явного Save.
     func analyseCurrent(conversation: String? = nil, apphudId: String) {
         Task {
             do {
@@ -3057,12 +3115,25 @@ final class CheaterViewModel: ObservableObject {
         }
     }
 
+    /// Явное сохранение результата анализа в историю.
+    func saveToHistory(note: String? = "AI risk analysis") {
+        guard let kind = lastKind, let r = lastResult else { return }
+        store.add(.init(
+            date: Date(),
+            kind: kind,
+            riskScore: r.risk_score,
+            note: note,
+            redFlags: r.red_flags,
+            recommendations: r.recommendations
+        ))
+        didSave = true
+    }
+
     // MARK: - Private
 
     private func runTask(files: [MultipartFormData.FilePart], conversation: String?, kind: CheaterRecord.Kind) async throws {
         state = .uploading(progress: 10)
 
-        // По докам POST /api/task возвращает TaskReadDTO с id+status
         let created = try await api.createAnalyzeTask(files: files, conversation: conversation)
         state = .uploading(progress: 35)
 
@@ -3077,12 +3148,9 @@ final class CheaterViewModel: ObservableObject {
         switch final.status {
         case .finished:
             if case .details(let r)? = final.result {
-                store.add(.init(date: Date(),
-                                kind: kind,
-                                riskScore: r.risk_score,
-                                note: "AI risk analysis",
-                                redFlags: r.red_flags,
-                                recommendations: r.recommendations))
+                // E8: не сохраняем автоматически — показываем пользователю, а затем Save.
+                lastKind = kind
+                lastResult = r
                 state = .result(r)
             } else if case .message(let msg)? = final.result {
                 state = .error(msg)

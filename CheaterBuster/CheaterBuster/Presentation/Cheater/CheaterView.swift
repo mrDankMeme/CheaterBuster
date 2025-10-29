@@ -39,17 +39,29 @@ struct CheaterView: View {
         .background(Tokens.Color.backgroundMain.ignoresSafeArea())
         .navigationTitle("Cheater")
 
-        // Picker'ы
+        // ---- Pickers ----
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
+
         .fileImporter(
             isPresented: $showFilePicker,
             allowedContentTypes: [.pdf, .png, .jpeg, .plainText],
             allowsMultipleSelection: false
         ) { result in
-            if case .success(let urls) = result,
-               let url = urls.first,
-               let data = try? Data(contentsOf: url) {
-                vm.showFile(name: url.lastPathComponent, data: data)
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                // Важно: security-scoped доступ
+                let secured = url.startAccessingSecurityScopedResource()
+                defer { if secured { url.stopAccessingSecurityScopedResource() } }
+                do {
+                    let data = try Data(contentsOf: url)
+                    vm.showFile(name: url.lastPathComponent, data: data)
+                } catch {
+                    vm.presentError("Failed to read file: \(error.localizedDescription)")
+                }
+
+            case .failure(let error):
+                vm.presentError(error.localizedDescription)
             }
         }
 
@@ -57,22 +69,22 @@ struct CheaterView: View {
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self),
-                   let img = UIImage(data: data) {
+                   let img  = UIImage(data: data) {
                     await MainActor.run { vm.showImage(img) }
+                } else {
+                    await MainActor.run { vm.presentError("Failed to load photo") }
                 }
                 await MainActor.run { photoItem = nil }
             }
         }
 
-        // E8: автопереход на History после сохранения
+        // ---- E8: алерт и переход на History после сохранения ----
         .onChange(of: vm.didSave) { _, saved in
             guard saved else { return }
             showSavedAlert = true
         }
         .alert("Saved to History", isPresented: $showSavedAlert) {
-            Button("Open History") {
-                router.tab = .history
-            }
+            Button("Open History") { router.tab = .history }
             Button("OK", role: .cancel) { }
         }
     }
@@ -270,6 +282,7 @@ struct CheaterView: View {
     }
 
     private func showSourceActionSheet() {
+        // пока просто повторно открываем фотопикер
         showPhotoPicker = true
     }
 }
