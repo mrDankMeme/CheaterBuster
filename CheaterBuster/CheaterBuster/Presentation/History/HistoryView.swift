@@ -74,22 +74,8 @@ struct HistoryView: View {
             Spacer(minLength: 0)
         }
     }
-    @ViewBuilder
-       private func topBarClear(isHidden: Bool, action: @escaping () -> Void) -> some View {
-           HStack {
-               Spacer()
-               if !isHidden {
-                   Button("Clear") { action() }
-                       .font(Tokens.Font.caption)
-                       .foregroundStyle(Tokens.Color.accent)
-               }
-           }
-           .padding(.horizontal, Tokens.Spacing.x16)
-           .padding(.top, Tokens.Spacing.x8)
-       }
-}
 
-
+    // MARK: - Added (фикс дубликата): единая версия topBarClear, без второй копии и без лишней скобки
     @ViewBuilder
     private func topBarClear(isHidden: Bool, action: @escaping () -> Void) -> some View {
         HStack {
@@ -103,9 +89,10 @@ struct HistoryView: View {
         .padding(.horizontal, Tokens.Spacing.x16)
         .padding(.top, Tokens.Spacing.x8)
     }
-
+}
 
 // MARK: - Search list (исправлено под HistoryRecord)
+import SwiftUI
 
 private struct SearchList: View {
     let items: [HistoryRecord]
@@ -186,7 +173,7 @@ private struct SearchRow: View {
     }
 }
 
-// MARK: - Cheater list (без изменений)
+// MARK: - Cheater list
 
 private struct CheaterList: View {
     let items: [CheaterRecord]
@@ -292,7 +279,7 @@ private struct SegmentCapsule: View {
     private func seg(_ title: String, _ seg: HistoryViewModel.Segment) -> some View {
         Button {
             selected = seg
-            router.rememberHistorySegment(seg) // ✅ запоминаем выбор
+            router.rememberHistorySegment(seg)
         } label: {
             Text(title)
                 .font(Tokens.Font.caption)
