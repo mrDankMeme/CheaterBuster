@@ -26,7 +26,8 @@ struct RootTabView: View {
                 .tabItem { Label("History", systemImage: "clock") }
                 .tag(AppRouter.Tab.history)
 
-            SettingsScreen()
+            // MARK: - Changed: инжектим VM для Settings из DI (store уже зарегистрирован)
+            SettingsScreen(vm: SettingsViewModel(store: resolver.resolve(SettingsStore.self)!))
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(AppRouter.Tab.settings)
         }
