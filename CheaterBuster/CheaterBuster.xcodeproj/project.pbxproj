@@ -81,6 +81,7 @@
 		A3B134942EB4C24800E9486A /* SubscriptionServiceStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134932EB4C24800E9486A /* SubscriptionServiceStub.swift */; };
 		A3B134972EB4CF1400E9486A /* PermissionsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134962EB4CF1400E9486A /* PermissionsManager.swift */; };
 		A3B1349A2EB4CF3600E9486A /* PermissionsManagerImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134992EB4CF3600E9486A /* PermissionsManagerImpl.swift */; };
+		A3B1349E2EB4D7A800E9486A /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B1349D2EB4D7A800E9486A /* OnboardingView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -159,6 +160,7 @@
 		A3B134962EB4CF1400E9486A /* PermissionsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsManager.swift; sourceTree = "<group>"; };
 		A3B134992EB4CF3600E9486A /* PermissionsManagerImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsManagerImpl.swift; sourceTree = "<group>"; };
 		A3B1349B2EB4CFFE00E9486A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A3B1349D2EB4D7A800E9486A /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -272,6 +274,7 @@
 		A35FF35E2EB0CE200000E890 /* Presentation */ = {
 			isa = PBXGroup;
 			children = (
+				A3B1349C2EB4D79F00E9486A /* Onboarding */,
 				A3B134882EB4BEA800E9486A /* Paywall */,
 				A35FF3A72EB11ABE0000E890 /* Common */,
 				A35FF3622EB0CE450000E890 /* Settings */,
@@ -526,6 +529,14 @@
 			path = Permissions;
 			sourceTree = "<group>";
 		};
+		A3B1349C2EB4D79F00E9486A /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				A3B1349D2EB4D7A800E9486A /* OnboardingView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -602,6 +613,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A3B1349E2EB4D7A800E9486A /* OnboardingView.swift in Sources */,
 				A35FF3942EB0FCF20000E890 /* Services+VMAssembly.swift in Sources */,
 				A35FF3C22EB225B70000E890 /* MultipartFormData.swift in Sources */,
 				A35FF38C2EB0F1090000E890 /* SettingsStoreImpl.swift in Sources */,
