@@ -1,0 +1,1110 @@
+//
+//  CheaterViewModel.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import Foundation
+import UIKit
+import Combine
+
+@MainActor
+final class CheaterViewModel: ObservableObject {
+
+     enum State {
+        case idle
+        case previewImage(UIImage)
+        case previewFile(name: String, data: Data)
+        case uploading(progress: Int)
+        case result(TaskResult)
+        case error(String)
+    }
+
+    @Published  var state: State = .idle
+
+    // E8: храним последний результат (для Save/Share)
+    private var lastKind: CheaterRecord.Kind?
+    private var lastResult: TaskResult?
+
+    // Сигнал «сохранено» для экрана (для перехода на History)
+    @Published private(set) var didSave: Bool = false
+
+    private let auth: AuthRepository
+    private let api: CheaterAPI
+    private let poller: TaskPoller
+    private let store: CheaterStore
+    private let cfg: APIConfig
+
+    init(auth: AuthRepository, api: CheaterAPI, poller: TaskPoller, store: CheaterStore, cfg: APIConfig) {
+        self.auth = auth; self.api = api; self.poller = poller; self.store = store; self.cfg = cfg
+    }
+
+    func showImage(_ image: UIImage) { state = .previewImage(image) }
+    func showFile(name: String, data: Data) { state = .previewFile(name: name, data: data) }
+
+    /// Публичный метод, чтобы экран мог показать ошибку, не трогая `state` напрямую.
+    func presentError(_ message: String) { state = .error(message) }
+
+    /// Старт анализа, теперь **не** сохраняем авто в историю — ждём явного Save.
+    func analyseCurrent(conversation: String? = nil, apphudId: String) {
+        Task {
+            do {
+                try await auth.ensureAuthorized(apphudId: apphudId)
+
+                switch state {
+                case .previewImage(let img):
+                    guard let data = img.jpegData(compressionQuality: 0.9) else { throw APIError.noData }
+                    try await runTask(files: [
+                        .init(name: "files", filename: "image.jpg", mimeType: "image/jpeg", data: data)
+                    ], conversation: conversation, kind: .image)
+
+                case .previewFile(let name, let data):
+                    try await runTask(files: [
+                        .init(name: "files", filename: name, mimeType: mime(for: name), data: data)
+                    ], conversation: conversation, kind: .file)
+
+                default:
+                    break
+                }
+            } catch {
+                presentError((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+            }
+        }
+    }
+
+    /// Явное сохранение результата анализа в историю.
+    func saveToHistory(note: String? = "AI risk analysis") {
+        guard let kind = lastKind, let r = lastResult else { return }
+        store.add(.init(
+            date: Date(),
+            kind: kind,
+            riskScore: r.risk_score,
+            note: note,
+            redFlags: r.red_flags,
+            recommendations: r.recommendations
+        ))
+        didSave = true
+    }
+
+    // MARK: - Private
+
+    private func runTask(files: [MultipartFormData.FilePart], conversation: String?, kind: CheaterRecord.Kind) async throws {
+        state = .uploading(progress: 10)
+
+        let created = try await api.createAnalyzeTask(files: files, conversation: conversation)
+        state = .uploading(progress: 35)
+
+        let final: TaskReadDTO
+        switch created.status {
+        case .finished, .failed:
+            final = created
+        default:
+            final = try await poller.waitForAnalyzeResult(taskId: created.id, interval: 1.0)
+        }
+
+        switch final.status {
+        case .finished:
+            if case .details(let r)? = final.result {
+                // E8: не сохраняем автоматически — показываем пользователю, а затем Save.
+                lastKind = kind
+                lastResult = r
+                state = .result(r)
+            } else if case .message(let msg)? = final.result {
+                presentError(msg)
+            } else {
+                presentError("Empty result")
+            }
+
+        case .failed:
+            presentError(final.error ?? "Analysis failed")
+
+        default:
+            presentError("Unexpected status: \(final.status)")
+        }
+    }
+
+    private func mime(for filename: String) -> String {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        switch ext {
+        case "jpg","jpeg": return "image/jpeg"
+        case "png":        return "image/png"
+        case "pdf":        return "application/pdf"
+        case "txt":        return "text/plain"
+        default:           return "application/octet-stream"
+        }
+    }
+}
+//
+//  LegendDot.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+
+// Presentation/Cheater/Result/LegendDot.swift
+// MARK: - Added
+
+import SwiftUI
+
+struct LegendDot: View {
+    let color: Color
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 8.scale) {
+            Circle()
+                .fill(color)
+                .frame(width: 20.scale, height: 20.scale)
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .tracking(-0.16)
+                .foregroundColor(Tokens.Color.textSecondary)
+        }
+    }
+}
+// Presentation/Cheater/Result/RedFlagCard.swift
+// MARK: - Added
+
+import SwiftUI
+
+struct RedFlagCard: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12.scale) {
+            Image("danger") // 20×20
+                .resizable()
+                .renderingMode(.original)
+                .frame(width: 20.scale, height: 20.scale)
+                .padding(.top, 2.scale)
+
+            VStack(alignment: .leading, spacing: 8.scale) {
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .tracking(-0.16)
+                    .foregroundColor(Tokens.Color.textPrimary)
+
+                Text(subtitle)
+                    .font(.system(size: 15, weight: .regular))
+                    .tracking(-0.15)
+                    .foregroundColor(Tokens.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 14.scale)
+        .padding(.horizontal, 16.scale)
+        .frame(maxWidth: .infinity) // одинаковая ширина
+        .background(
+            Color(hex: "#FFF3F3"),
+            in: RoundedRectangle(cornerRadius: 22.scale, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22.scale, style: .continuous)
+                .stroke(Color(hex: "#FFB9B9"), lineWidth: 1)
+        )
+    }
+}
+// Presentation/Cheater/Result/RecommendationCard.swift
+// MARK: - Added
+
+import SwiftUI
+
+struct RecommendationCard: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12.scale) {
+            Image("tickCircle") // 20×20
+                .resizable()
+                .renderingMode(.original)
+                .frame(width: 20.scale, height: 20.scale)
+                .padding(.top, 2.scale)
+
+            VStack(alignment: .leading, spacing: 8.scale) {
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))   // ✅ 16 Medium
+                    .tracking(-0.16)
+                    .foregroundColor(Tokens.Color.textPrimary)
+
+                Text(subtitle)
+                    .font(.system(size: 15, weight: .regular))  // ✅ 15 Regular
+                    .tracking(-0.15)
+                    .foregroundColor(Tokens.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 14.scale)
+        .padding(.horizontal, 16.scale)
+        .frame(maxWidth: .infinity)
+        .background(
+            Color(hex: "#ECFAF0"),
+            in: RoundedRectangle(cornerRadius: 22.scale, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22.scale, style: .continuous)
+                .stroke(Color(hex: "#BDEACB"), lineWidth: 1)
+        )
+    }
+}
+//  Presentation/Cheater/Result/RiskRingView.swift
+//  CheaterBuster
+//
+//  Updated: lineWidth = 17.scale, 32 semibold text with -4% tracking.
+
+import SwiftUI
+
+struct RiskRingView: View {
+    let percent: Int // 0...100
+
+    var body: some View {
+        ZStack {
+            // Grey track
+            Circle()
+                .stroke(Color.black.opacity(0.08),
+                        style: StrokeStyle(lineWidth: 17.scale, lineCap: .round))
+
+            // Colored progress (red → yellow → green)
+            Circle()
+                .trim(from: 0, to: CGFloat(max(0, min(1, Double(percent) / 100.0))))
+                .stroke(
+                    AngularGradient(
+                        gradient: Gradient(colors: [
+                            Color(hex: "#FA2C37"),
+                            Color(hex: "#FDC800"),
+                            Color(hex: "#FDC800"),
+                            Color(hex: "#00C850")
+                        ]),
+                        center: .center,
+                        startAngle: .degrees(210),
+                        endAngle: .degrees(570)
+                    ),
+                    style: StrokeStyle(lineWidth: 17.scale, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+
+            Text("\(percent)%")
+                .font(.system(size: 32, weight: .semibold))
+                .kerning(-0.04 * 32) // ≈ -4%
+                .foregroundColor(Tokens.Color.textPrimary)
+        }
+    }
+}
+//
+//  CheaterViewModel+InternalNavigation.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+import Foundation
+
+// MARK: - Added
+extension CheaterViewModel {
+    /// Возвращает экран Cheater в начальное состояние (idle),
+    /// как будто пользователь нажал "назад" с предпросмотра.
+    func goBackToIdle() {
+        self.state = .idle
+    }
+}
+import SwiftUI
+
+struct ProgressBar: View {
+    let progress: Double // 0...1
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                // Фон
+                Capsule(style: .continuous)
+                    .fill(Tokens.Color.borderNeutral.opacity(0.35))
+
+                // Прогресс (заполняется пропорционально ширине)
+                Capsule(style: .continuous)
+                    .fill(Tokens.Color.accent)
+                    .frame(width: geo.size.width * CGFloat(clampedProgress))
+                    .animation(.easeOut(duration: 0.25), value: progress)
+            }
+        }
+        .frame(height: 8.scale)
+        .clipShape(Capsule(style: .continuous))
+    }
+
+    // MARK: - Helper
+    private var clampedProgress: Double {
+        min(max(progress, 0), 1)
+    }
+}
+//
+//  ImageCard.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+
+// Presentation/Cheater/Components/ImageCard.swift
+import SwiftUI
+
+struct ImageCard: View {
+    let image: UIImage
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: Tokens.Radius.medium.scale, style: .continuous)
+                .fill(Tokens.Color.surfaceCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Tokens.Radius.medium.scale, style: .continuous)
+                        .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+                )
+                .apply(Tokens.Shadow.card)
+
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: 200.scale, maxHeight: 400.scale) // из макета
+                .clipped()
+                .cornerRadius(Tokens.Radius.small.scale)
+                .padding(16.scale)
+        }
+        .padding(.horizontal, 8.scale)
+    }
+}
+//
+//  ImageAnalysisHeader.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+
+// Presentation/Cheater/Components/ImageAnalysisHeader.swift
+import SwiftUI
+
+struct ImageAnalysisHeader: View {
+    let back: () -> Void
+    var body: some View {
+        HStack {
+            BackButton(size: 44.scale, action: back)
+            Spacer()
+            Text("Image analysis")
+                .font(.system(size: 18, weight: .medium))
+                .tracking(-0.18) // -1%
+                .foregroundColor(Tokens.Color.textPrimary)
+            Spacer()
+            Color.clear.frame(width: 44.scale, height: 44.scale)
+        }
+        .padding(.horizontal, 16.scale)
+        .padding(.bottom, 12.scale)
+    }
+}
+
+struct BackButton: View {
+    let size: CGFloat
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16.scale, style: .continuous)
+                    .fill(Tokens.Color.surfaceCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16.scale, style: .continuous)
+                            .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+                    )
+                    .apply(Tokens.Shadow.card)
+                if let ui = UIImage(named: "backButton") {
+                    Image(uiImage: ui).resizable().scaledToFit()
+                        .frame(width: (size ), height: (size ))
+                        .foregroundColor(Tokens.Color.textPrimary)
+                } else {
+                    Image(systemName: "arrow.left")
+                        .font(.system(size: 18.scale, weight: .semibold))
+                        .foregroundColor(Tokens.Color.textPrimary)
+                }
+            }
+            .frame(width: size, height: size)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("Back"))
+    }
+}
+//
+//  SourcePickerOverlay.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+
+// Presentation/Cheater/Overlays/SourcePickerOverlay.swift
+import SwiftUI
+
+struct SourcePickerOverlay: View {
+    let onFiles: () -> Void
+    let onLibrary: () -> Void
+    let onDismiss: () -> Void
+
+    @State private var shown = false
+    @GestureState private var dragY: CGFloat = 0
+
+    @State private var isDismissing = false
+    @State private var endDragY: CGFloat = 0
+
+    private var dismissThreshold: CGFloat { 140.scale }
+    private var dismissTravel: CGFloat { 260.scale }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            Color.black.opacity(backgroundOpacity)
+                .ignoresSafeArea()
+                .onTapGesture { dismissThen(from: 0) }
+                .animation(.easeOut(duration: 0.22), value: backgroundOpacity)
+
+            sheet
+                .offset(y: sheetOffset)
+                .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.9), value: dragY)
+                .animation(.easeOut(duration: 0.22), value: isDismissing)
+                .animation(.easeOut(duration: 0.20), value: shown)
+                .gesture(
+                    DragGesture(minimumDistance: 3, coordinateSpace: .local)
+                        .updating($dragY) { value, state, _ in
+                            state = max(0, value.translation.height)
+                        }
+                        .onEnded { value in
+                            let dy = max(0, value.translation.height)
+                            let predicted = max(0, value.predictedEndLocation.y - value.location.y)
+                            if dy > dismissThreshold || predicted > dismissThreshold {
+                                dismissThen(from: dy)
+                            } else {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                                    shown = true
+                                    isDismissing = false
+                                }
+                            }
+                        }
+                )
+        }
+        .onAppear { shown = true }
+    }
+
+    // MARK: layout helpers
+    private var sheetOffset: CGFloat {
+        isDismissing ? (endDragY + dismissTravel) : ((shown ? 0 : 40.scale) + max(0, dragY))
+    }
+    private var backgroundOpacity: Double {
+        if isDismissing { return 0 }
+        let base: Double = 0.35
+        let progress = max(0, 1 - Double(dragY / (dismissThreshold * 1.5)))
+        return shown ? (base * progress) : 0
+    }
+    private func dismissThen(from currentDrag: CGFloat) {
+        endDragY = currentDrag
+        isDismissing = true
+        shown = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { onDismiss() }
+    }
+
+    private var sheet: some View {
+        VStack(spacing: 16.scale) {
+            RoundedRectangle(cornerRadius: 3.scale)
+                .fill(Tokens.Color.borderNeutral.opacity(0.6))
+                .frame(width: 40.scale, height: 4.scale)
+                .padding(.top, 8.scale)
+
+            Text("Select a photo or file")
+                .font(.system(size: 20, weight: .medium))
+                .tracking(-0.20)
+                .multilineTextAlignment(.center)
+                .padding(.bottom, 8.scale)
+
+            VStack(spacing: 12.scale) {
+                SourceRow(systemImage: "folder", title: "Files") {
+                    dismissThen(from: 0)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) { onFiles() }
+                }
+                SourceRow(systemImage: "photo.on.rectangle.angled", title: "Library") {
+                    dismissThen(from: 0)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) { onLibrary() }
+                }
+            }
+            .padding(.horizontal, 16.scale)
+            .padding(.bottom, 16.scale)
+        }
+        .frame(maxWidth: .infinity)
+        .background(Tokens.Color.surfaceCard,
+                    in: RoundedRectangle(cornerRadius: 28.scale, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 28.scale, style: .continuous)
+                .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+        )
+        .apply(Tokens.Shadow.card)
+        .padding(.horizontal, 8.scale)
+        .padding(.bottom, 8.scale)
+    }
+}
+
+struct SourceRow: View {
+    let systemImage: String
+    let title: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12.scale) {
+                ZStack {
+                    Tokens.Color.backgroundMain
+                    Image(systemName: systemImage)
+                        .font(.system(size: 18.scale, weight: .semibold))
+                        .foregroundStyle(Tokens.Color.accent)
+                }
+                .frame(width: 44.scale, height: 44.scale)
+                .clipShape(RoundedRectangle(cornerRadius: 14.scale, style: .continuous))
+
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .tracking(-0.16)
+
+                Spacer()
+            }
+            .padding(.vertical, 12.scale)
+            .padding(.horizontal, 12.scale)
+            .background(
+                Tokens.Color.surfaceCard,
+                in: RoundedRectangle(cornerRadius: Tokens.Radius.medium.scale, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Tokens.Radius.medium.scale, style: .continuous)
+                    .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+            )
+            .apply(Tokens.Shadow.card)
+        }
+        .buttonStyle(.plain)
+    }
+}
+// Presentation/Cheater/CheaterView.swift
+// CheaterBuster
+
+import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
+import Swinject
+
+struct CheaterView: View {
+    @ObservedObject var vm: CheaterViewModel
+    @EnvironmentObject private var router: AppRouter
+    @Environment(\.resolver) private var resolver
+
+    @State private var photoItem: PhotosPickerItem?
+    @State private var showPhotoPicker = false
+    @State private var showFilePicker = false
+    @State private var conversationText: String = ""
+    @State private var showSavedAlert = false
+    @State private var showPaywall = false
+    @State private var showSourceSheet = false
+
+    // Показываем превью в .uploading
+    @State private var lastPreviewImage: UIImage? = nil
+
+    init(vm: CheaterViewModel) { self.vm = vm }
+
+    var body: some View {
+        VStack(spacing: Tokens.Spacing.x16) { content }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.top, Tokens.Spacing.x24)
+            .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+            .navigationTitle(navigationTitle)
+            .toolbar(.hidden, for: .navigationBar)
+
+            // Pickers
+            .photosPicker(isPresented: $showPhotoPicker,
+                          selection: $photoItem,
+                          matching: .images)
+            .fileImporter(
+                isPresented: $showFilePicker,
+                allowedContentTypes: [.pdf, .png, .jpeg, .plainText],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    guard let url = urls.first else { return }
+                    let secured = url.startAccessingSecurityScopedResource()
+                    defer { if secured { url.stopAccessingSecurityScopedResource() } }
+                    do {
+                        let data = try Data(contentsOf: url)
+                        vm.showFile(name: url.lastPathComponent, data: data)
+                    } catch {
+                        vm.presentError("Failed to read file: \(error.localizedDescription)")
+                    }
+                case .failure(let error):
+                    vm.presentError(error.localizedDescription)
+                }
+            }
+
+            // Photos -> UIImage
+            .onChange(of: photoItem) { item in
+                guard let item else { return }
+                Task {
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let img  = UIImage(data: data) {
+                        await MainActor.run {
+                            vm.showImage(img)
+                            lastPreviewImage = img
+                        }
+                    } else {
+                        await MainActor.run { vm.presentError("Failed to load photo") }
+                    }
+                    await MainActor.run { photoItem = nil }
+                }
+            }
+
+            // Saved alert
+            .onChange(of: vm.didSave) { _, saved in
+                guard saved else { return }
+                showSavedAlert = true
+            }
+            .alert("Saved to History", isPresented: $showSavedAlert) {
+                Button("Open History") { router.openHistoryCheater() }
+                Button("OK", role: .cancel) { }
+            }
+
+            // Paywall
+            .fullScreenCover(isPresented: $showPaywall) {
+                let paywallVM = resolver.resolve(PaywallViewModel.self)!
+                PaywallView(vm: paywallVM).presentationDetents([.large])
+            }
+
+            // Source picker overlay
+            .overlay(alignment: .bottom) {
+                if showSourceSheet {
+                    SourcePickerOverlay(
+                        onFiles:  { showFilePicker = true },
+                        onLibrary:{ showPhotoPicker = true },
+                        onDismiss:{ showSourceSheet = false }
+                    )
+                }
+            }
+    }
+
+    // MARK: - Content
+    @ViewBuilder
+    private var content: some View {
+        switch vm.state {
+        case .idle: idleView
+        case .previewImage(let img): imagePreview(img)
+        case .previewFile(let name, _): filePreview(name: name)
+        case .uploading(let p): uploadingView(progress: p)
+        case .result(let r):
+            // MARK: - Changed: вынесли в отдельный файл
+            CheaterResultView(
+                result: r,
+                onBack: { vm.goBackToIdle() },
+                onSelectMessage: { withAnimation(.easeOut(duration: 0.2)) { showSourceSheet = true } }
+            )
+        case .error(let msg): errorView(msg)
+        }
+    }
+
+    // MARK: - Idle
+    private var idleView: some View {
+        VStack(spacing: Tokens.Spacing.x24) {
+            Spacer(minLength: 0)
+            Text("Analysis of the fraudster's correspondence")
+                .font(Tokens.Font.title)
+                .tracking(-0.22)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16.scale)
+            Spacer()
+            PrimaryButton("Select message") {
+                withAnimation(.easeOut(duration: 0.2)) { showSourceSheet = true }
+            }
+        }
+        .padding(.bottom, 24.scale)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+
+    // MARK: - Image preview
+    private func imagePreview(_ img: UIImage) -> some View {
+        VStack(spacing: 0) {
+            header
+            ScrollView {
+                VStack(spacing: 20.scale) {
+                    imageCard(image: img)
+                        .onAppear { lastPreviewImage = img }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8.scale)
+            }
+            VStack(spacing: 12.scale) {
+                PrimaryButton("Analyse") {
+                    let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                    guard isPremium else { showPaywall = true; return }
+                    vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
+                }
+            }
+            .padding(.horizontal, 16.scale)
+            .padding(.top, 16.scale)
+            .padding(.bottom, 24.scale)
+        }
+        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+    }
+
+    // MARK: - Uploading
+    private func uploadingView(progress p: Int) -> some View {
+        VStack(spacing: 0) {
+            header
+            ScrollView {
+                VStack(spacing: 20.scale) {
+                    if let img = lastPreviewImage {
+                        imageCard(image: img)
+                    } else {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: Tokens.Radius.medium.scale, style: .continuous)
+                                .fill(Tokens.Color.surfaceCard)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: Tokens.Radius.medium.scale, style: .continuous)
+                                        .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+                                )
+                                .apply(Tokens.Shadow.card)
+                            Text("Preparing preview…")
+                                .font(Tokens.Font.caption)
+                                .foregroundColor(Tokens.Color.textSecondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 420.scale)
+                        .padding(.horizontal, 8.scale)
+                    }
+
+                    Text("\(p)%")
+                        .font(.system(size: 20, weight: .bold))
+                        .tracking(-0.20)
+                        .foregroundColor(Tokens.Color.textPrimary)
+                        .multilineTextAlignment(.center)
+
+                    // MARK: - Fixed progress fill (теперь не “полный красный”)
+                    ProgressBar(progress: max(0, min(1, Double(p) / 100.0)))
+                        .frame(width: 260.scale, height: 8.scale)
+                        .padding(.top, 8.scale)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8.scale)
+            }
+
+            // Кнопка становится активной только при 100%
+            VStack(spacing: 12.scale) {
+                PrimaryButton("View analysis report") { }
+                    .disabled(p < 100)
+                    .opacity(p < 100 ? 0.6 : 1)
+            }
+            .padding(.horizontal, 16.scale)
+            .padding(.top, 16.scale)
+            .padding(.bottom, 24.scale)
+        }
+        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+    }
+
+    // MARK: - Header (общий)
+    private var header: some View {
+        HStack {
+            BackButton(size: 44.scale) { vm.goBackToIdle() }
+            Spacer()
+            Text("Image analysis")
+                .font(.system(size: 18, weight: .medium))
+                .tracking(-0.18)
+                .foregroundColor(Tokens.Color.textPrimary)
+            Spacer()
+            Color.clear.frame(width: 44.scale, height: 44.scale)
+        }
+        .padding(.horizontal, 16.scale)
+        .padding(.bottom, 12.scale)
+    }
+
+    // MARK: - Image card
+    private func imageCard(image: UIImage) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: Tokens.Radius.medium.scale, style: .continuous)
+                .fill(Tokens.Color.surfaceCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Tokens.Radius.medium.scale, style: .continuous)
+                        .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+                )
+                .apply(Tokens.Shadow.card)
+
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: 200.scale, maxHeight: 400.scale)
+                .clipped()
+                .cornerRadius(Tokens.Radius.small.scale)
+                .padding(16.scale)
+        }
+        .padding(.horizontal, 8.scale)
+    }
+
+    // MARK: - File preview (без изменений)
+    private func filePreview(name: String) -> some View {
+        VStack(spacing: Tokens.Spacing.x16) {
+            VStack(spacing: Tokens.Spacing.x12) {
+                Image(systemName: "folder")
+                    .resizable().scaledToFit()
+                    .frame(width: 112.scale, height: 112.scale)
+                    .foregroundColor(Tokens.Color.textSecondary)
+                Text(name)
+                    .font(Tokens.Font.body)
+                    .foregroundColor(Tokens.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, Tokens.Spacing.x16)
+
+            PrimaryButton("Analyse") {
+                let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                guard isPremium else { showPaywall = true; return }
+                vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func errorView(_ msg: String) -> some View {
+        VStack(spacing: Tokens.Spacing.x16) {
+            Text(msg).font(Tokens.Font.body).foregroundColor(.red).multilineTextAlignment(.center)
+            PrimaryButton("Try again") { withAnimation(.easeOut(duration: 0.2)) { showSourceSheet = true } }
+            Spacer(minLength: 0)
+        }
+        .navigationTitle("Image analysis")
+    }
+
+    private var navigationTitle: String {
+        switch vm.state {
+        case .idle: return "Cheater"
+        case .previewImage, .previewFile, .uploading, .result, .error: return "Image analysis"
+        }
+    }
+}
+//  Presentation/Cheater/Result/CheaterResultView.swift
+//  CheaterBuster
+//
+//  Updated: use *Card components only*, supports init(result:) and init(record:)
+//  Spacing: 16.scale sides, 16.scale from headings to cards, 8.scale between cards,
+//           32.scale between sections. Ring 120×120.scale, lineWidth handled in RiskRingView.
+
+import SwiftUI
+
+// MARK: - Internal Screen Model
+private struct ResultModel: Equatable {
+    let riskScore: Int
+    let redFlags: [String]
+    let recommendations: [String]
+}
+
+// MARK: - View
+struct CheaterResultView: View {
+
+    // Inputs
+    private let model: ResultModel
+    private let onBack: () -> Void
+    private let onSelectMessage: () -> Void
+
+    // MARK: Inits (work both from live result and from history)
+    init(
+        result: TaskResult,
+        onBack: @escaping () -> Void = {},
+        onSelectMessage: @escaping () -> Void = {}
+    ) {
+        self.model = .init(
+            riskScore: result.risk_score,
+            redFlags: result.red_flags,
+            recommendations: result.recommendations
+        )
+        self.onBack = onBack
+        self.onSelectMessage = onSelectMessage
+    }
+
+    init(
+        record: CheaterRecord,
+        onBack: @escaping () -> Void = {},
+        onSelectMessage: @escaping () -> Void = {}
+    ) {
+        self.model = .init(
+            riskScore: record.riskScore,
+            redFlags: record.redFlags,
+            recommendations: record.recommendations
+        )
+        self.onBack = onBack
+        self.onSelectMessage = onSelectMessage
+    }
+
+    // MARK: - Body
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+
+                    // MARK: Summary (title + subtitle + ring + legend)
+                    summaryBlock
+                        .padding(.horizontal, 16.scale)
+                        .padding(.top, 8.scale)
+
+                    // MARK: Red flags
+                    if !model.redFlags.isEmpty {
+                        Text("Red flasg")
+                            .font(.system(size: 18.scale, weight: .medium)) // medium 18
+                            .tracking(-0.18)
+                            .foregroundStyle(Tokens.Color.textPrimary)
+                            .padding(.horizontal, 16.scale)
+                            .padding(.top, 32.scale)
+
+                        VStack(spacing: 8.scale) {
+                            ForEach(model.redFlags, id: \.self) { txt in
+                                RedFlagCard(
+                                    title: "Suspicious languagw delected",
+                                    subtitle: "Phrase: \(txt)"
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 16.scale)
+                        .padding(.top, 16.scale)
+                    }
+
+                    // Gap between sections
+                    if !model.redFlags.isEmpty, !model.recommendations.isEmpty {
+                        Spacer().frame(height: 32.scale)
+                    }
+
+                    // MARK: Recommendations
+                    if !model.recommendations.isEmpty {
+                        Text("Recommendations")
+                            .font(.system(size: 18, weight: .medium)) // medium 18
+                            .tracking(-0.18)
+                            .foregroundStyle(Tokens.Color.textPrimary)
+                            .padding(.horizontal, 16.scale)
+
+                        VStack(spacing: 8.scale) {
+                            ForEach(model.recommendations, id: \.self) { rec in
+                                RecommendationCard(
+                                    title: "Save evidence",
+                                    subtitle: rec
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 16.scale)
+                        .padding(.top, 16.scale)
+                    }
+
+                    // CTA
+                    PrimaryButton("Select message") { onSelectMessage() }
+                        .padding(.horizontal, 16.scale)
+                        .padding(.vertical, 24.scale)
+                }
+            }
+            .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+        }
+        .navigationBarHidden(true)
+    }
+
+    // MARK: Header
+    private var header: some View {
+        HStack(spacing: 0) {
+            BackButton(size: 44.scale, action: onBack)
+
+            Spacer()
+
+            Text("Image analysis")
+                .font(.system(size: 18.scale, weight: .medium)) // medium 18
+                .tracking(-0.18)
+                .foregroundStyle(Tokens.Color.textPrimary)
+
+            Spacer()
+
+            // symmetry spacer
+            Color.clear.frame(width: 44.scale, height: 44.scale)
+        }
+        .padding(.horizontal, 16.scale)
+        .padding(.top, 10.scale)
+        .padding(.bottom, 8.scale)
+        .background(Tokens.Color.backgroundMain)
+    }
+
+    // MARK: Summary block (title, subtitle, ring, legend)
+    private var summaryBlock: some View {
+        VStack(spacing: 0) {
+            // Title + green tick (24×24.scale)
+            HStack(alignment: .center, spacing: 8.scale) {
+                Text("Risk analysis complete")
+                    .font(.system(size: 22, weight: .medium)) // medium 22
+                    .tracking(-0.22)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+
+                Image("tickSquare")
+                    .resizable()
+                    .renderingMode(.original)
+                    .frame(width: 24.scale, height: 24.scale)
+                    .accessibilityHidden(true)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+
+            // 1) Между title и subtitle — 8.scale
+            Text(detectedSubtitle(for: model.riskScore))
+                .font(.system(size: 16, weight: .medium)) // medium 16
+                .tracking(-0.16)
+                .foregroundStyle(Tokens.Color.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 8.scale)
+
+            // 2) Между subtitle и кольцом — 24.scale
+            RiskRingView(percent: model.riskScore)
+                .frame(width: 120.scale, height: 120.scale)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 24.scale)
+
+            // 3) Между кольцом и "High risk level" — 16.scale
+            Text(riskLevelLabel(for: model.riskScore))
+                .font(.system(size: 20.scale, weight: .regular)) // body 20
+                .tracking(-0.20)
+                .foregroundStyle(Tokens.Color.textSecondary)
+                .padding(.top, 16.scale)
+
+            // 4) Между "High risk level" и легендой — 16.scale
+            HStack(spacing: 24.scale) {
+                legendDot(.green, text: "Low")
+                legendDot(.yellow, text: "Medium")
+                legendDot(.red, text: "High")
+            }
+            .padding(.top, 16.scale)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private func legendDot(_ color: Color, text: String) -> some View {
+        HStack(spacing: 8.scale) {
+            Circle().fill(color).frame(width: 20.scale, height: 20.scale)
+            Text(text)
+                .font(.system(size: 16.scale, weight: .medium)) // medium 16
+                .tracking(-0.16)
+                .foregroundStyle(Tokens.Color.textSecondary)
+        }
+    }
+
+    private func riskLevelLabel(for score: Int) -> String {
+        switch score {
+        case 0..<34:  return "Low risk level"
+        case 34..<67: return "Medium risk level"
+        default:      return "High risk level"
+        }
+    }
+
+    private func detectedSubtitle(for score: Int) -> String {
+        switch score {
+        case 0..<34:  return "Low risk detected in this message"
+        case 34..<67: return "Medium risk detected in this message"
+        default:      return "High risk detected in this message"
+        }
+    }
+}
