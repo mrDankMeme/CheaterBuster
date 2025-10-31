@@ -12,13 +12,40 @@ import Combine
 @MainActor
 final class CheaterViewModel: ObservableObject {
 
-     enum State {
+    enum State: Equatable {
         case idle
         case previewImage(UIImage)
         case previewFile(name: String, data: Data)
         case uploading(progress: Int)
         case result(TaskResult)
         case error(String)
+
+        static func == (lhs: State, rhs: State) -> Bool {
+            switch (lhs, rhs) {
+            case (.idle, .idle):
+                return true
+
+            case let (.previewImage(lImg), .previewImage(rImg)):
+                // ⚠️ UIImage не поддерживает Equatable.
+                // Можно сравнить по data или hash.
+                return lImg.pngData() == rImg.pngData()
+
+            case let (.previewFile(lName, lData), .previewFile(rName, rData)):
+                return lName == rName && lData == rData
+
+            case let (.uploading(lProgress), .uploading(rProgress)):
+                return lProgress == rProgress
+
+            case let (.result(lResult), .result(rResult)):
+                return lResult == rResult  // если TaskResult : Equatable
+
+            case let (.error(lMsg), .error(rMsg)):
+                return lMsg == rMsg
+
+            default:
+                return false
+            }
+        }
     }
 
     @Published  var state: State = .idle
