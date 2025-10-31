@@ -453,8 +453,8 @@ public enum Tokens {
         public static let textSecondary = SwiftUI.Color("TextSecondary")
         
         public static let borderNeutral = SwiftUI.Color("BorderNeutral")
-        
         public static let backgroundMain = SwiftUI.Color("BackgroundMain")
+        public static let shadowBlack7 = SwiftUI.Color("ShadowBlack7")
         public static let surfaceCard = SwiftUI.Color("SurfaceCard")
     }
     
@@ -828,16 +828,17 @@ final class ServicesAssembly: Assembly {
 
 import SwiftUI
 import Swinject
-import StoreKit // для Rate Us
-// MARK: - Added
-import AppTrackingTransparency
-import UserNotifications
+import StoreKit
 
 struct RootTabView: View {
     @Environment(\.resolver) private var resolver
     @EnvironmentObject private var router: AppRouter
 
-    @State private var didCheckFirstRun = false
+    @AppStorage("cb.hasOnboarded") private var hasOnboarded = false
+
+    // раньше был отдельный стейт showOnboardingCover — больше не нужен
+    @State private var didRunFirstFlow = false
+    @State private var showRateUs = false
     @State private var showInitialPaywall = false
 
     var body: some View {
@@ -862,34 +863,60 @@ struct RootTabView: View {
             .tabItem { Label("Settings", systemImage: "gearshape") }
             .tag(AppRouter.Tab.settings)
         }
-        .task {
-            guard !didCheckFirstRun else { return }
-            didCheckFirstRun = true
-
-            // показываем Rate Us -> Paywall (уже было реализовано на P0)
-            let flagKey = "cb.didShowRateThenPaywall.v1"
-            let alreadyShown = UserDefaults.standard.bool(forKey: flagKey)
-            if alreadyShown == false {
-                SKStoreReviewController.requestReview()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    showInitialPaywall = true
-                    UserDefaults.standard.set(true, forKey: flagKey)
+        // MARK: - Fix: онбординг привязан напрямую к hasOnboarded
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { hasOnboarded == false },
+                set: { presented in
+                    // Если пользователь смахнул экран — считаем онбординг пройденным
+                    if presented == false { hasOnboarded = true }
                 }
-            }
-
-            // MARK: - Added: «отложенные» запросы разрешений после онбординг-флоу
-            // 1) ATT (tracking)
-            let permissions = resolver.resolve(PermissionsManager.self)!
-            _ = await permissions.request(.tracking)
-
-            // 2) Notifications
-            _ = await permissions.request(.notifications)
+            )
+        ) {
+            OnboardingView()
         }
+        // кастомный Rate Us
+        .sheet(isPresented: $showRateUs) {
+            RateUsView(
+                imageName: "rateus_hand",
+                onLater: {
+                    showRateUs = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        showInitialPaywall = true
+                    }
+                },
+                onRated: {
+                    showRateUs = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        showInitialPaywall = true
+                    }
+                }
+            )
+            .presentationDetents([.large])
+        }
+        // paywall
         .sheet(isPresented: $showInitialPaywall) {
             let vm = resolver.resolve(PaywallViewModel.self)!
             PaywallView(vm: vm)
                 .presentationDetents([.large])
         }
+        .onChange(of: hasOnboarded) { _, newValue in
+            if newValue { triggerFirstRunFlowIfNeeded() }
+        }
+        .task {
+            if hasOnboarded { triggerFirstRunFlowIfNeeded() }
+        }
+    }
+
+    private func triggerFirstRunFlowIfNeeded() {
+        guard didRunFirstFlow == false else { return }
+        didRunFirstFlow = true
+
+        let key = "cb.didShowRateThenPaywall.v1"
+        guard UserDefaults.standard.bool(forKey: key) == false else { return }
+
+        showRateUs = true
+        UserDefaults.standard.set(true, forKey: key)
     }
 }
 //
@@ -2676,18 +2703,16 @@ private struct CircleTool: View {
         .buttonStyle(.plain)
     }
 }
-//
 //  SearchScreen.swift
 //  CheaterBuster
 //
 //  Created by Niiaz Khasanov on 10/28/25.
 //
 
-
 import SwiftUI
 
 struct SearchScreen: View {
-    @State private var goName = false
+    // MARK: - Removed: goName (больше не нужен)
     @State private var goPhoto = false
     private let vm: SearchViewModel
 
@@ -2702,11 +2727,11 @@ struct SearchScreen: View {
                     .padding(.top, Tokens.Spacing.x8)
 
                 VStack(spacing: Tokens.Spacing.x12) {
-                    CardRow(
-                        icon: "text.magnifyingglass",
-                        title: "Search for a partner by name"
-                    ) { goName = true }
+                    // MARK: - Removed: карточка текстового поиска
+                    // CardRow(icon: "text.magnifyingglass",
+                    //         title: "Search for a partner by name") { goName = true }
 
+                    // Оставляем только поиск по фото
                     CardRow(
                         icon: "face.smiling",
                         title: "Finding a partner by face"
@@ -2717,9 +2742,8 @@ struct SearchScreen: View {
             }
             .padding(.horizontal, Tokens.Spacing.x16)
             .background(Tokens.Color.backgroundMain.ignoresSafeArea())
-            .navigationDestination(isPresented: $goName) {
-                NameSearchView(vm: vm)
-            }
+
+            // MARK: - Removed: navigationDestination для NameSearchView
             .navigationDestination(isPresented: $goPhoto) {
                 FaceSearchView(vm: vm)
             }
@@ -3012,6 +3036,105 @@ private struct AsyncThumb: View {
     }
 }
 //
+//  RateUsView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+
+
+import SwiftUI
+import StoreKit
+
+struct RateUsView: View {
+    /// Имя PDF-ассета: "rateus_hand" или "rateus_stars"
+    let imageName: String
+
+    /// Колбэк закрытия (например, "Rate later")
+    let onLater: () -> Void
+    /// Колбэк после "Rate now" (покажем системный рейтинг и закроем)
+    let onRated: () -> Void
+
+    init(
+        imageName: String = "rateus_hand",
+        onLater: @escaping () -> Void,
+        onRated: @escaping () -> Void
+    ) {
+        self.imageName = imageName
+        self.onLater = onLater
+        self.onRated = onRated
+    }
+
+    var body: some View {
+        ZStack {
+            Tokens.Color.backgroundMain.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 24)
+
+                // Иллюстрация — PDF, адаптивно
+                GeometryReader { geo in
+                    let side = min(geo.size.width * 0.6, 260)
+                    Image(imageName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: side, height: side)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .frame(height: 300)
+
+                Spacer(minLength: 0)
+
+                VStack(spacing: 14) {
+                    Text("Love using Cheater Booster?")
+                        .font(Tokens.Font.h2)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(Tokens.Color.textPrimary)
+                        .padding(.horizontal, 24)
+
+                    Text("Leave a quick rating to help others discover it — your support means a lot!")
+                        .font(Tokens.Font.body)
+                        .foregroundStyle(Tokens.Color.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
+                .padding(.bottom, 24)
+
+                // Кнопка "Rate later" — outline
+                Button(action: { onLater() }) {
+                    Text("Rate later")
+                        .font(Tokens.Font.subtitle)
+                        .foregroundStyle(Tokens.Color.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
+                                .fill(Tokens.Color.surfaceCard)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
+                                .stroke(Tokens.Color.accent, lineWidth: 1.5)
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 24)
+
+                // Кнопка "Rate now" — primary (на твоём PrimaryButton)
+                PrimaryButton("Rate now") {
+                    SKStoreReviewController.requestReview()
+                    onRated()
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
+
+                Spacer(minLength: 24)
+            }
+        }
+        .accessibilityIdentifier("rateus.screen")
+    }
+}
+//
 //  LoadingView.swift
 //  CheaterBuster
 //
@@ -3178,7 +3301,6 @@ final class HistoryViewModel: ObservableObject {
         selectedCheater = rec
     }
 }
-//
 //  HistoryView.swift
 //  CheaterBuster
 //
@@ -3215,14 +3337,15 @@ struct HistoryView: View {
                 .onChange(of: vm.rerunResults) { _, hits in
                     if !hits.isEmpty { goResults = true }
                 }
+                // Было: mode: .name — меняем на .face, т.к. теперь доступен только поиск по фото
                 .navigationDestination(isPresented: $goResults) {
-                    SearchResultsView(results: vm.rerunResults, mode: .name)
+                    SearchResultsView(results: vm.rerunResults, mode: .face)
                 }
                 .navigationDestination(item: $vm.selectedCheater) { rec in
                     CheaterResultView(record: rec)
                 }
         }
-        // MARK: - Added Paywall
+        // Paywall (как и было добавлено ранее)
         .sheet(isPresented: $showPaywall) {
             let paywallVM = resolver.resolve(PaywallViewModel.self)!
             PaywallView(vm: paywallVM)
@@ -3242,7 +3365,6 @@ struct HistoryView: View {
             .padding(.horizontal, Tokens.Spacing.x16)
             .padding(.top, Tokens.Spacing.x16)
 
-            // ✅ передаём router в SegmentCapsule
             SegmentCapsule(selected: $vm.segment, router: router)
                 .padding(.horizontal, Tokens.Spacing.x16)
                 .padding(.top, Tokens.Spacing.x12)
@@ -3251,7 +3373,13 @@ struct HistoryView: View {
                 if vm.segment == .search {
                     topBarClear(isHidden: vm.items.isEmpty) { vm.clearSearch() }
                     SearchList(items: vm.items) { rec in
-                        // MARK: - Added (premium gate for re-run)
+                        // Если запись текстового поиска — не перезапускаем (функции нет).
+                        guard rec.kind == .face else {
+                            // Мягко ничего не делаем; можно подсветить тостом в будущем.
+                            return
+                        }
+
+                        // Premium-гейт оставляем без изменений:
                         let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
                         if isPremium {
                             vm.onTapSearch(rec)
@@ -3272,7 +3400,6 @@ struct HistoryView: View {
         }
     }
 
-    // MARK: - Added (фикс дубликата): единая версия topBarClear, без второй копии и без лишней скобки
     @ViewBuilder
     private func topBarClear(isHidden: Bool, action: @escaping () -> Void) -> some View {
         HStack {
@@ -3288,7 +3415,7 @@ struct HistoryView: View {
     }
 }
 
-// MARK: - Search list (исправлено под HistoryRecord)
+// MARK: - Search list (как было)
 import SwiftUI
 
 private struct SearchList: View {
@@ -3314,10 +3441,10 @@ private struct SearchRow: View {
     let rec: HistoryRecord
 
     private var titleText: String {
-        // приоритет: titlePreview -> query (для .name) -> дефолт по типу
         if let t = rec.titlePreview, !t.isEmpty { return t }
         switch rec.kind {
         case .name:
+            // Текстовый поиск убран — показываем нейтральную подпись, если в истории внезапно окажется запись старого формата
             return rec.query?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 ? (rec.query ?? "Name search")
                 : "Name search"
@@ -3327,14 +3454,12 @@ private struct SearchRow: View {
     }
 
     private var subtitleText: String {
-        // приоритет: sourcePreview -> дата
         if let s = rec.sourcePreview, !s.isEmpty { return s }
         return DateFormatter.historyDate.string(from: rec.createdAt)
     }
 
     var body: some View {
         HStack(spacing: Tokens.Spacing.x12) {
-            // левая иконка по типу запроса
             ZStack {
                 Tokens.Color.backgroundMain
                 Image(systemName: rec.kind == .name ? "text.magnifyingglass" : "face.smiling")
@@ -4293,5 +4418,221 @@ final class PaywallViewModel: ObservableObject {
             errorText = error.localizedDescription
         }
         isProcessing = false
+    }
+}
+//
+//  OnboardingView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+import SwiftUI
+
+struct OnboardingView: View {
+    // Один раз показываем онбординг
+    @AppStorage("cb.hasOnboarded") private var hasOnboarded = false
+
+    /// index: 0 = splash, 1..slides.count = реальный слайд
+    @State private var index: Int = 0
+
+    struct Slide: Identifiable, Hashable {
+        let id = UUID()
+        let imageName: String
+        let title: String
+        let subtitle: String
+    }
+
+    private let slides: [Slide] = [
+        .init(
+            imageName: "onboarding_face",
+            title: "Find anyone by photo or name",
+            subtitle: "Upload a photo or enter a name — AI will match profiles across the web."
+        ),
+        .init(
+            imageName: "onboarding_phone",
+            title: "Stay safe from scammers",
+            subtitle: "AI protects you from fake profiles and scam chats."
+        ),
+        .init(
+            imageName: "onboarding_couple",
+            title: "Find out the truth in relationships",
+            subtitle: "AI helps you check if your partner’s photos or profiles appear elsewhere."
+        )
+    ]
+
+    var body: some View {
+        ZStack {
+            Tokens.Color.backgroundMain.ignoresSafeArea()
+
+            if index == 0 {
+                // SPLASH (логотип по центру)
+                Image("onboarding_logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 160, height: 160)
+                    .transition(.opacity)
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                index = 1
+                            }
+                        }
+                    }
+            } else {
+                VStack(spacing: 0) {
+                    // MARK: Progress (верхние капсулы как в макете)
+                    StepProgress(current: index, total: slides.count)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+
+                    // MARK: Контент слайдов
+                    TabView(selection: $index) {
+                        ForEach(Array(slides.enumerated()), id: \.offset) { offset, slide in
+                            SlideScreen(
+                                slide: slide,
+                                isLast: offset == slides.count - 1,
+                                onSkip: finish,
+                                onNext: {
+                                    if offset == slides.count - 1 {
+                                        finish()
+                                    } else {
+                                        withAnimation { index = offset + 2 } // следующий tag
+                                    }
+                                }
+                            )
+                            .tag(offset + 1)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                }
+                .animation(.easeInOut(duration: 0.25), value: index)
+            }
+        }
+    }
+
+    private func finish() {
+        hasOnboarded = true
+    }
+}
+
+// MARK: - StepProgress (капсулы 3 шт., активная — цвет Accent)
+private struct StepProgress: View {
+    let current: Int   // 1..total
+    let total: Int
+
+    var body: some View {
+        HStack(spacing: 16) {
+            ForEach(1...total, id: \.self) { step in
+                Capsule()
+                    .fill(step <= current ? Tokens.Color.accent : Tokens.Color.borderNeutral.opacity(0.25))
+                    .frame(height: 6)
+                    .overlay(
+                        Capsule().stroke(Tokens.Color.borderNeutral.opacity(0.0001), lineWidth: 1)
+                    )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Слайд (верх: Skip; середина: иконка; низ: карточный блок с тенью)
+private struct SlideScreen: View {
+    let slide: OnboardingView.Slide
+    let isLast: Bool
+    let onSkip: () -> Void
+    let onNext: () -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .topTrailing) {
+                // Кнопка Skip справа сверху
+                Button("Skip") { onSkip() }
+                    .font(Tokens.Font.caption)
+                    .foregroundStyle(Tokens.Color.textSecondary)
+                    .padding(.trailing, 20)
+                    .padding(.top, 4)
+                    .accessibilityIdentifier("onboarding.skip")
+
+                VStack(spacing: 0) {
+                    Spacer(minLength: 12)
+
+                    // Иллюстрация: максимум 354pt, иначе 75% ширины
+                    let maxSide = min(geo.size.width * 0.75, 354)
+                    Image(slide.imageName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: maxSide, height: maxSide)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 8)
+
+                    Spacer()
+
+                    // Нижний карточный блок — как в макете
+                    BottomCard {
+                        VStack(spacing: 12) {
+                            Text(slide.title)
+                                .font(Tokens.Font.h2)
+                                .multilineTextAlignment(.center)
+                                .foregroundStyle(Tokens.Color.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Text(slide.subtitle)
+                                .font(Tokens.Font.body)
+                                .multilineTextAlignment(.center)
+                                .foregroundStyle(Tokens.Color.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+
+                        PrimaryButton("Continue") {
+                            onNext()
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                        .padding(.bottom, 8)
+                    }
+                    .padding(.horizontal, 8) // чтобы тень красиво читалась на краях
+                    .padding(.bottom, 8)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .ignoresSafeArea(.keyboard)
+    }
+}
+
+// MARK: - Карточный нижний блок (скругление сверху, тень как в макете)
+private struct BottomCard<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            content
+        }
+        .padding(.top, 16)
+        .padding(.bottom, 20)
+        .background(
+            Tokens.Color.surfaceCard,
+            in: UnevenRoundedRectangle(
+                topLeadingRadius: 28,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 28,
+                style: .continuous
+            )
+        )
+        .shadow(color: Tokens.Color.shadowBlack7, radius: 24, y: -2) // соответствует твоему ShadowBlack7 в палитре
+        .overlay(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 28,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 28,
+                style: .continuous
+            )
+            .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+        )
     }
 }

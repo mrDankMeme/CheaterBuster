@@ -163,7 +163,7 @@ struct FaceSearchView: View {
         }
 
         // MARK: - Added Paywall
-        .sheet(isPresented: $showPaywall) {
+        .fullScreenCover(isPresented: $showPaywall) {
             let paywallVM = resolver.resolve(PaywallViewModel.self)!
             PaywallView(vm: paywallVM)
                 .presentationDetents([.large])

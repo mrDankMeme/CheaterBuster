@@ -18,8 +18,8 @@ public enum Tokens {
         public static let textSecondary = SwiftUI.Color("TextSecondary")
         
         public static let borderNeutral = SwiftUI.Color("BorderNeutral")
-        
         public static let backgroundMain = SwiftUI.Color("BackgroundMain")
+        public static let shadowBlack7 = SwiftUI.Color("ShadowBlack7")
         public static let surfaceCard = SwiftUI.Color("SurfaceCard")
     }
     

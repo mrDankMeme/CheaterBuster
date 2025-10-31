@@ -116,14 +116,14 @@ struct SettingsScreen: View {
             .background(Tokens.Color.backgroundMain.ignoresSafeArea())
             .navigationTitle("Settings")
         }
-        .sheet(isPresented: $showPaywall) {
+        .fullScreenCover(isPresented: $showPaywall) {
             // Resolve VM из DI при показе
             let paywallVM = resolver.resolve(PaywallViewModel.self)!
             PaywallView(vm: paywallVM)
                 .presentationDetents([.large])
         }
         // MARK: - Added: Share sheet
-        .sheet(isPresented: $showShareSheet) {
+        .fullScreenCover(isPresented: $showShareSheet) {
             ActivityView(activityItems: [shareText])
         }
     }
