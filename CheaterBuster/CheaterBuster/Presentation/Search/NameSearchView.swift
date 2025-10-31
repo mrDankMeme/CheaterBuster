@@ -6,13 +6,16 @@
 //
 
 import SwiftUI
+import Swinject // MARK: - Added
 
 struct NameSearchView: View {
     @ObservedObject var vm: SearchViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.resolver) private var resolver // MARK: - Added
 
     @State private var goResults = false
     @State private var didSubmit = false
+    @State private var showPaywall = false // MARK: - Added
 
     var body: some View {
         ZStack {
@@ -66,6 +69,12 @@ struct NameSearchView: View {
                     isLoading: vm.isLoading,
                     isDisabled: vm.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || vm.isLoading
                 ) {
+                    // MARK: - Added (premium gate)
+                    let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                    guard isPremium else {
+                        showPaywall = true
+                        return
+                    }
                     didSubmit = true
                     vm.runNameSearch()
                 }
@@ -78,7 +87,7 @@ struct NameSearchView: View {
             )
         }
 
-        
+        // Переход к результатам после завершения загрузки
         .onChange(of: vm.isLoading) { was, isNow in
             if didSubmit && was == true && isNow == false {
                 didSubmit = false
@@ -89,7 +98,7 @@ struct NameSearchView: View {
             SearchResultsView(results: vm.results, mode: .name)
         }
 
-        
+        // Блокирующая "загрузка"
         .fullScreenCover(
             isPresented: Binding(
                 get: { vm.isBlockingLoading },
@@ -98,6 +107,13 @@ struct NameSearchView: View {
         ) {
             LoadingView(mode: .name, previewImage: nil, cancelAction: nil)
                 .interactiveDismissDisabled(true)
+        }
+
+        // MARK: - Added Paywall
+        .sheet(isPresented: $showPaywall) {
+            let paywallVM = resolver.resolve(PaywallViewModel.self)!
+            PaywallView(vm: paywallVM)
+                .presentationDetents([.large])
         }
     }
 }

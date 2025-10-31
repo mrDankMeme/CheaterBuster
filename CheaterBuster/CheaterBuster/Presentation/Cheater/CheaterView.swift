@@ -5,15 +5,15 @@
 //  Created by Niiaz Khasanov on 10/28/25.
 //
 
-
-
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
+import Swinject // MARK: - Added
 
 struct CheaterView: View {
     @ObservedObject var vm: CheaterViewModel
     @EnvironmentObject private var router: AppRouter
+    @Environment(\.resolver) private var resolver // MARK: - Added
 
     // PhotosPicker
     @State private var photoItem: PhotosPickerItem?
@@ -27,6 +27,9 @@ struct CheaterView: View {
 
     // Alert after saving
     @State private var showSavedAlert = false
+
+    // MARK: - Added
+    @State private var showPaywall = false
 
     init(vm: CheaterViewModel) {
         self.vm = vm
@@ -93,6 +96,13 @@ struct CheaterView: View {
             }
             Button("OK", role: .cancel) { }
         }
+
+        // MARK: - Added Paywall
+        .sheet(isPresented: $showPaywall) {
+            let paywallVM = resolver.resolve(PaywallViewModel.self)!
+            PaywallView(vm: paywallVM)
+                .presentationDetents([.large])
+        }
     }
 
     // MARK: - Content
@@ -115,7 +125,7 @@ struct CheaterView: View {
         }
     }
 
-    // MARK: - Subviews (без изменений ниже)
+    // MARK: - Subviews (без изменений ниже, кроме premium-гейта в Анализ)
 
     private var idleView: some View {
         VStack(spacing: Tokens.Spacing.x24) {
@@ -151,6 +161,12 @@ struct CheaterView: View {
             }
 
             PrimaryButton("Analyse") {
+                // MARK: - Added (premium gate)
+                let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                guard isPremium else {
+                    showPaywall = true
+                    return
+                }
                 vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
             }
 
@@ -174,6 +190,12 @@ struct CheaterView: View {
             .padding(.top, Tokens.Spacing.x16)
 
             PrimaryButton("Analyse") {
+                // MARK: - Added (premium gate)
+                let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                guard isPremium else {
+                    showPaywall = true
+                    return
+                }
                 vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
             }
 

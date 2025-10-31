@@ -79,6 +79,8 @@
 		A3B134902EB4C1F600E9486A /* PremiumStoreImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B1348F2EB4C1F600E9486A /* PremiumStoreImpl.swift */; };
 		A3B134922EB4C20C00E9486A /* SubscriptionPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134912EB4C20C00E9486A /* SubscriptionPlan.swift */; };
 		A3B134942EB4C24800E9486A /* SubscriptionServiceStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134932EB4C24800E9486A /* SubscriptionServiceStub.swift */; };
+		A3B134972EB4CF1400E9486A /* PermissionsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134962EB4CF1400E9486A /* PermissionsManager.swift */; };
+		A3B1349A2EB4CF3600E9486A /* PermissionsManagerImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134992EB4CF3600E9486A /* PermissionsManagerImpl.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -154,6 +156,9 @@
 		A3B1348F2EB4C1F600E9486A /* PremiumStoreImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumStoreImpl.swift; sourceTree = "<group>"; };
 		A3B134912EB4C20C00E9486A /* SubscriptionPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionPlan.swift; sourceTree = "<group>"; };
 		A3B134932EB4C24800E9486A /* SubscriptionServiceStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionServiceStub.swift; sourceTree = "<group>"; };
+		A3B134962EB4CF1400E9486A /* PermissionsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsManager.swift; sourceTree = "<group>"; };
+		A3B134992EB4CF3600E9486A /* PermissionsManagerImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsManagerImpl.swift; sourceTree = "<group>"; };
+		A3B1349B2EB4CFFE00E9486A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -198,6 +203,7 @@
 		A35FF34E2EB005DD0000E890 /* CheaterBuster */ = {
 			isa = PBXGroup;
 			children = (
+				A3B1349B2EB4CFFE00E9486A /* Info.plist */,
 				A35FF3BD2EB225490000E890 /* Infrastucture */,
 				A35FF35A2EB0CDF10000E890 /* Application */,
 				A35FF35C2EB0CE090000E890 /* Domain */,
@@ -244,6 +250,7 @@
 		A35FF35C2EB0CE090000E890 /* Domain */ = {
 			isa = PBXGroup;
 			children = (
+				A3B134952EB4CF0A00E9486A /* Permissions */,
 				A3B1347D2EB4B25300E9486A /* Services */,
 				A3B134772EB4B21900E9486A /* Stores */,
 				A35FF3632EB0CE570000E890 /* Entities */,
@@ -390,6 +397,7 @@
 		A35FF3BD2EB225490000E890 /* Infrastucture */ = {
 			isa = PBXGroup;
 			children = (
+				A3B134982EB4CF2F00E9486A /* Permissions */,
 				A35FF3E72EB232A50000E890 /* Security */,
 				A35FF3BE2EB225640000E890 /* Networking */,
 			);
@@ -502,6 +510,22 @@
 			path = Paywall;
 			sourceTree = "<group>";
 		};
+		A3B134952EB4CF0A00E9486A /* Permissions */ = {
+			isa = PBXGroup;
+			children = (
+				A3B134962EB4CF1400E9486A /* PermissionsManager.swift */,
+			);
+			path = Permissions;
+			sourceTree = "<group>";
+		};
+		A3B134982EB4CF2F00E9486A /* Permissions */ = {
+			isa = PBXGroup;
+			children = (
+				A3B134992EB4CF3600E9486A /* PermissionsManagerImpl.swift */,
+			);
+			path = Permissions;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -610,6 +634,7 @@
 				A35FF3AD2EB12D790000E890 /* CheaterRecord.swift in Sources */,
 				A3B1348E2EB4C1E400E9486A /* PremiumStore.swift in Sources */,
 				A35FF3732EB0D3460000E890 /* SettingsViewModel.swift in Sources */,
+				A3B1349A2EB4CF3600E9486A /* PermissionsManagerImpl.swift in Sources */,
 				A35FF3A92EB11AC50000E890 /* LoadingView.swift in Sources */,
 				A35FF3982EB1047A0000E890 /* RootTabView.swift in Sources */,
 				A35FF3A62EB10FCD0000E890 /* FaceSearchView.swift in Sources */,
@@ -627,6 +652,7 @@
 				A3B134872EB4BD9E00E9486A /* SubscriptionServiceImpl.swift in Sources */,
 				A35FF3572EB00CE80000E890 /* PrimaryButton.swift in Sources */,
 				A35FF39E2EB107420000E890 /* HistoryView.swift in Sources */,
+				A3B134972EB4CF1400E9486A /* PermissionsManager.swift in Sources */,
 				A35FF39C2EB106150000E890 /* CheaterView.swift in Sources */,
 				A3B1347F2EB4B25900E9486A /* UserService.swift in Sources */,
 				A35FF3CE2EB2291E0000E890 /* TaskDTO.swift in Sources */,
@@ -785,6 +811,11 @@
 				DEVELOPMENT_TEAM = 2NVL5EUMWM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CheaterBuster/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Нужен доступ к камере, чтобы сделать фото для поиска.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Нужен доступ для сохранения результатов в вашу фотогалерею.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Нужен доступ к вашим фото, чтобы выполнить поиск по изображению.";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Мы используем идентификатор для улучшения персонализации и аналитики.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -816,6 +847,11 @@
 				DEVELOPMENT_TEAM = 2NVL5EUMWM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CheaterBuster/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Нужен доступ к камере, чтобы сделать фото для поиска.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Нужен доступ для сохранения результатов в вашу фотогалерею.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Нужен доступ к вашим фото, чтобы выполнить поиск по изображению.";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Мы используем идентификатор для улучшения персонализации и аналитики.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

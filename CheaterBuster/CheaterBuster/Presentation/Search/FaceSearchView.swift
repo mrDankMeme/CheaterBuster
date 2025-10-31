@@ -8,16 +8,19 @@
 import SwiftUI
 import PhotosUI
 import UIKit
+import Swinject // MARK: - Added
 
 struct FaceSearchView: View {
     @ObservedObject var vm: SearchViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.resolver) private var resolver // MARK: - Added
 
     @State private var item: PhotosPickerItem?
     @State private var image: UIImage?
 
     @State private var goResults = false
     @State private var didAnalyze = false
+    @State private var showPaywall = false // MARK: - Added
 
     var body: some View {
         ZStack {
@@ -81,7 +84,7 @@ struct FaceSearchView: View {
         }
         .navigationBarBackButtonHidden(true)
 
-        // Bottom tools panel (как на макете)
+        // Bottom tools panel
         .safeAreaInset(edge: .bottom) {
             HStack(spacing: Tokens.Spacing.x16) {
                 CircleTool(system: "rotate.left")  { /* позже */ }
@@ -94,6 +97,12 @@ struct FaceSearchView: View {
                 Button {
                     guard let img = image,
                           let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
+                    // MARK: - Added (premium gate)
+                    let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                    guard isPremium else {
+                        showPaywall = true
+                        return
+                    }
                     didAnalyze = true
                     vm.runImageSearch(jpegData: jpeg)
                 } label: {
@@ -118,7 +127,7 @@ struct FaceSearchView: View {
             )
         }
 
-        
+        // Photos picker
         .photosPicker(isPresented: Binding(
             get: { image == nil && item == nil }, set: { _ in }
         ), selection: $item, matching: .images)
@@ -131,7 +140,7 @@ struct FaceSearchView: View {
             }
         }
 
-        
+        // Навигация к результатам
         .onChange(of: vm.isLoading) { was, isNow in
             if didAnalyze && was == true && isNow == false {
                 didAnalyze = false
@@ -142,7 +151,7 @@ struct FaceSearchView: View {
             SearchResultsView(results: vm.results, mode: .face)
         }
 
-        
+        // Блокирующая "загрузка"
         .fullScreenCover(
             isPresented: Binding(
                 get: { vm.isBlockingLoading },
@@ -151,6 +160,13 @@ struct FaceSearchView: View {
         ) {
             LoadingView(mode: .face, previewImage: image, cancelAction: nil)
                 .interactiveDismissDisabled(true)
+        }
+
+        // MARK: - Added Paywall
+        .sheet(isPresented: $showPaywall) {
+            let paywallVM = resolver.resolve(PaywallViewModel.self)!
+            PaywallView(vm: paywallVM)
+                .presentationDetents([.large])
         }
     }
 }

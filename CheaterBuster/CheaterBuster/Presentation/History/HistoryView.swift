@@ -1,4 +1,3 @@
-//
 //  HistoryView.swift
 //  CheaterBuster
 //
@@ -7,11 +6,14 @@
 
 import SwiftUI
 import UIKit
+import Swinject // MARK: - Added
 
 struct HistoryView: View {
     @StateObject private var vm: HistoryViewModel
     @EnvironmentObject private var router: AppRouter
+    @Environment(\.resolver) private var resolver // MARK: - Added
     @State private var goResults = false
+    @State private var showPaywall = false // MARK: - Added
 
     init(vm: HistoryViewModel) {
         _vm = StateObject(wrappedValue: vm)
@@ -32,12 +34,19 @@ struct HistoryView: View {
                 .onChange(of: vm.rerunResults) { _, hits in
                     if !hits.isEmpty { goResults = true }
                 }
+                // Было: mode: .name — меняем на .face, т.к. теперь доступен только поиск по фото
                 .navigationDestination(isPresented: $goResults) {
-                    SearchResultsView(results: vm.rerunResults, mode: .name)
+                    SearchResultsView(results: vm.rerunResults, mode: .face)
                 }
                 .navigationDestination(item: $vm.selectedCheater) { rec in
                     CheaterResultView(record: rec)
                 }
+        }
+        // Paywall (как и было добавлено ранее)
+        .sheet(isPresented: $showPaywall) {
+            let paywallVM = resolver.resolve(PaywallViewModel.self)!
+            PaywallView(vm: paywallVM)
+                .presentationDetents([.large])
         }
     }
 
@@ -53,7 +62,6 @@ struct HistoryView: View {
             .padding(.horizontal, Tokens.Spacing.x16)
             .padding(.top, Tokens.Spacing.x16)
 
-            // ✅ передаём router в SegmentCapsule
             SegmentCapsule(selected: $vm.segment, router: router)
                 .padding(.horizontal, Tokens.Spacing.x16)
                 .padding(.top, Tokens.Spacing.x12)
@@ -61,9 +69,23 @@ struct HistoryView: View {
             Group {
                 if vm.segment == .search {
                     topBarClear(isHidden: vm.items.isEmpty) { vm.clearSearch() }
-                    SearchList(items: vm.items) { rec in vm.onTapSearch(rec) }
-                        .padding(.horizontal, Tokens.Spacing.x16)
-                        .padding(.top, Tokens.Spacing.x16)
+                    SearchList(items: vm.items) { rec in
+                        // Если запись текстового поиска — не перезапускаем (функции нет).
+                        guard rec.kind == .face else {
+                            // Мягко ничего не делаем; можно подсветить тостом в будущем.
+                            return
+                        }
+
+                        // Premium-гейт оставляем без изменений:
+                        let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                        if isPremium {
+                            vm.onTapSearch(rec)
+                        } else {
+                            showPaywall = true
+                        }
+                    }
+                    .padding(.horizontal, Tokens.Spacing.x16)
+                    .padding(.top, Tokens.Spacing.x16)
                 } else {
                     topBarClear(isHidden: vm.cheaterItems.isEmpty) { vm.clearCheater() }
                     CheaterList(items: vm.cheaterItems) { rec in vm.onTapCheater(rec) }
@@ -75,7 +97,6 @@ struct HistoryView: View {
         }
     }
 
-    // MARK: - Added (фикс дубликата): единая версия topBarClear, без второй копии и без лишней скобки
     @ViewBuilder
     private func topBarClear(isHidden: Bool, action: @escaping () -> Void) -> some View {
         HStack {
@@ -91,7 +112,7 @@ struct HistoryView: View {
     }
 }
 
-// MARK: - Search list (исправлено под HistoryRecord)
+// MARK: - Search list (как было)
 import SwiftUI
 
 private struct SearchList: View {
@@ -117,10 +138,10 @@ private struct SearchRow: View {
     let rec: HistoryRecord
 
     private var titleText: String {
-        // приоритет: titlePreview -> query (для .name) -> дефолт по типу
         if let t = rec.titlePreview, !t.isEmpty { return t }
         switch rec.kind {
         case .name:
+            // Текстовый поиск убран — показываем нейтральную подпись, если в истории внезапно окажется запись старого формата
             return rec.query?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 ? (rec.query ?? "Name search")
                 : "Name search"
@@ -130,14 +151,12 @@ private struct SearchRow: View {
     }
 
     private var subtitleText: String {
-        // приоритет: sourcePreview -> дата
         if let s = rec.sourcePreview, !s.isEmpty { return s }
         return DateFormatter.historyDate.string(from: rec.createdAt)
     }
 
     var body: some View {
         HStack(spacing: Tokens.Spacing.x12) {
-            // левая иконка по типу запроса
             ZStack {
                 Tokens.Color.backgroundMain
                 Image(systemName: rec.kind == .name ? "text.magnifyingglass" : "face.smiling")
@@ -173,8 +192,7 @@ private struct SearchRow: View {
     }
 }
 
-// MARK: - Cheater list
-
+// MARK: - Cheater list (без изменений)
 private struct CheaterList: View {
     let items: [CheaterRecord]
     let onTap: (CheaterRecord) -> Void
@@ -245,8 +263,7 @@ private struct CheaterRow: View {
     }
 }
 
-// MARK: - DateFormatter (локальный)
-
+// MARK: - DateFormatter
 private extension DateFormatter {
     static let historyDate: DateFormatter = {
         let df = DateFormatter()
@@ -256,8 +273,7 @@ private extension DateFormatter {
     }()
 }
 
-// MARK: - Segment
-
+// MARK: - Segment (без изменений)
 private struct SegmentCapsule: View {
     @Binding var selected: HistoryViewModel.Segment
     @ObservedObject var router: AppRouter

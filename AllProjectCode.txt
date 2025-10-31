@@ -129,6 +129,142 @@ struct APIConfig {
     let bundleId: String = Bundle.main.bundleIdentifier ?? "dev.cheaterbuster"
 }
 //
+//  PermissionsManagerImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+
+
+import Foundation
+import AppTrackingTransparency   // MARK: - Added
+import AdSupport                 // MARK: - Added
+import Photos                    // MARK: - Added
+import AVFoundation              // MARK: - Added
+import UserNotifications         // MARK: - Added
+
+final class PermissionsManagerImpl: PermissionsManager {
+
+    // MARK: - Status
+
+    func status(of permission: Permission) async -> PermissionStatus {
+        switch permission {
+        case .tracking:
+            if #available(iOS 14, *) {
+                switch ATTrackingManager.trackingAuthorizationStatus {
+                case .authorized:   return .authorized
+                case .denied:       return .denied
+                case .restricted:   return .restricted
+                case .notDetermined:return .notDetermined
+                @unknown default:   return .temporarilyUnavailable
+                }
+            } else {
+                return .unsupported
+            }
+
+        case .notifications:
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            switch settings.authorizationStatus {
+            case .authorized, .provisional, .ephemeral: return .authorized
+            case .denied:       return .denied
+            case .notDetermined:return .notDetermined
+            @unknown default:   return .temporarilyUnavailable
+            }
+
+        case .photoLibrary:
+            let s = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+            switch s {
+            case .authorized, .limited: return .authorized
+            case .denied:       return .denied
+            case .restricted:   return .restricted
+            case .notDetermined:return .notDetermined
+            @unknown default:   return .temporarilyUnavailable
+            }
+
+        case .camera:
+            let s = AVCaptureDevice.authorizationStatus(for: .video)
+            switch s {
+            case .authorized:   return .authorized
+            case .denied:       return .denied
+            case .restricted:   return .restricted
+            case .notDetermined:return .notDetermined
+            @unknown default:   return .temporarilyUnavailable
+            }
+
+        case .files:
+            // На iOS доступ к файлам идёт через UIDocumentPicker (пермишна нет).
+            return .authorized
+        }
+    }
+
+    // MARK: - Request
+
+    func request(_ permission: Permission) async -> PermissionStatus {
+        switch permission {
+        case .tracking:
+            if #available(iOS 14, *) {
+                let current = await status(of: .tracking)
+                if current != .notDetermined { return current }
+                let result = await withCheckedContinuation { (continuation: CheckedContinuation<PermissionStatus, Never>) in
+                    ATTrackingManager.requestTrackingAuthorization { status in
+                        switch status {
+                        case .authorized:   continuation.resume(returning: .authorized)
+                        case .denied:       continuation.resume(returning: .denied)
+                        case .restricted:   continuation.resume(returning: .restricted)
+                        case .notDetermined:continuation.resume(returning: .notDetermined)
+                        @unknown default:   continuation.resume(returning: .temporarilyUnavailable)
+                        }
+                    }
+                }
+                _ = ASIdentifierManager.shared().advertisingIdentifier // «пробуждение» фреймворка
+                return result
+            } else {
+                return .unsupported
+            }
+
+        case .notifications:
+            let current = await status(of: .notifications)
+            if current != .notDetermined { return current }
+            do {
+                let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
+                return granted ? .authorized : .denied
+            } catch {
+                return .temporarilyUnavailable
+            }
+
+        case .photoLibrary:
+            let current = await status(of: .photoLibrary)
+            if current != .notDetermined { return current }
+            return await withCheckedContinuation { (continuation: CheckedContinuation<PermissionStatus, Never>) in
+                PHPhotoLibrary.requestAuthorization(for: .readWrite) { s in
+                    switch s {
+                    case .authorized, .limited: continuation.resume(returning: .authorized)
+                    case .denied:       continuation.resume(returning: .denied)
+                    case .restricted:   continuation.resume(returning: .restricted)
+                    case .notDetermined:continuation.resume(returning: .notDetermined)
+                    @unknown default:   continuation.resume(returning: .temporarilyUnavailable)
+                    }
+                }
+            }
+
+        case .camera:
+            let current = await status(of: .camera)
+            if current != .notDetermined { return current }
+            let granted = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                AVCaptureDevice.requestAccess(for: .video) { granted in
+                    continuation.resume(returning: granted)
+                }
+            }
+            return granted ? .authorized : .denied
+
+        case .files:
+            // Пермишна нет, считаем доступ разрешён (UIDocumentPicker сам покажет системный UI).
+            return .authorized
+        }
+    }
+}
+//
 //  ContentView.swift
 //  CheaterBuster
 //
@@ -555,13 +691,6 @@ final class AppRouter: ObservableObject {
 //  Created by Niiaz Khasanov on 10/28/25.
 //
 
-//
-//  Services+VMAssembly.swift
-//  CheaterBuster
-//
-//  Created by Niiaz Khasanov on 10/28/25.
-//
-
 import Foundation
 import Swinject
 
@@ -620,7 +749,16 @@ final class ServicesAssembly: Assembly {
         container.register(SettingsStore.self) { _ in SettingsStoreImpl() }
             .inObjectScope(.container)
 
-        // MARK: Domain / Search Repository (НОВОЕ)
+        // MARK: - Added: Premium & Subscriptions
+        container.register(PremiumStore.self) { _ in PremiumStoreImpl() }
+            .inObjectScope(.container)
+
+        container.register(SubscriptionService.self) { r in
+            SubscriptionServiceStub(store: r.resolve(PremiumStore.self)!)
+        }
+        .inObjectScope(.container)
+
+        // MARK: Domain / Search Repository (НОВОЕ ранее)
         container.register(SearchRepository.self) { r in
             SearchRepositoryImpl(api: r.resolve(CheaterAPI.self)!)
         }
@@ -664,6 +802,21 @@ final class ServicesAssembly: Assembly {
                 cfg: r.resolve(APIConfig.self)!
             )
         }
+
+        // Added: Settings VM
+        container.register(SettingsViewModel.self) { r in
+            SettingsViewModel(store: r.resolve(SettingsStore.self)!)
+        }
+
+        // Added: Paywall VM
+        container.register(PaywallViewModel.self) { r in
+            PaywallViewModel(subscription: r.resolve(SubscriptionService.self)!)
+        }
+       
+        container.register(PermissionsManager.self) { _ in
+            PermissionsManagerImpl()
+        }.inObjectScope(.container)
+
     }
 }
 //
@@ -675,10 +828,17 @@ final class ServicesAssembly: Assembly {
 
 import SwiftUI
 import Swinject
+import StoreKit // для Rate Us
+// MARK: - Added
+import AppTrackingTransparency
+import UserNotifications
 
 struct RootTabView: View {
     @Environment(\.resolver) private var resolver
     @EnvironmentObject private var router: AppRouter
+
+    @State private var didCheckFirstRun = false
+    @State private var showInitialPaywall = false
 
     var body: some View {
         TabView(selection: $router.tab) {
@@ -694,11 +854,143 @@ struct RootTabView: View {
                 .tabItem { Label("History", systemImage: "clock") }
                 .tag(AppRouter.Tab.history)
 
-            SettingsScreen()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
-                .tag(AppRouter.Tab.settings)
+            SettingsScreen(
+                vm: SettingsViewModel(
+                    store: resolver.resolve(SettingsStore.self)!
+                )
+            )
+            .tabItem { Label("Settings", systemImage: "gearshape") }
+            .tag(AppRouter.Tab.settings)
+        }
+        .task {
+            guard !didCheckFirstRun else { return }
+            didCheckFirstRun = true
+
+            // показываем Rate Us -> Paywall (уже было реализовано на P0)
+            let flagKey = "cb.didShowRateThenPaywall.v1"
+            let alreadyShown = UserDefaults.standard.bool(forKey: flagKey)
+            if alreadyShown == false {
+                SKStoreReviewController.requestReview()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    showInitialPaywall = true
+                    UserDefaults.standard.set(true, forKey: flagKey)
+                }
+            }
+
+            // MARK: - Added: «отложенные» запросы разрешений после онбординг-флоу
+            // 1) ATT (tracking)
+            let permissions = resolver.resolve(PermissionsManager.self)!
+            _ = await permissions.request(.tracking)
+
+            // 2) Notifications
+            _ = await permissions.request(.notifications)
+        }
+        .sheet(isPresented: $showInitialPaywall) {
+            let vm = resolver.resolve(PaywallViewModel.self)!
+            PaywallView(vm: vm)
+                .presentationDetents([.large])
         }
     }
+}
+//
+//  PremiumStoreImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+
+import Foundation
+
+final class PremiumStoreImpl: PremiumStore {
+    private let key = "cb.premium.v1"
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    var isPremium: Bool {
+        get {
+            // дефолт — false
+            (defaults.object(forKey: key) as? Bool) ?? false
+        }
+        set {
+            defaults.set(newValue, forKey: key)
+        }
+    }
+}
+//
+//  TokensStoreImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+
+import Foundation
+
+final class TokensStoreImpl: TokensStore {
+    private let key = "cb.tokens.v1"
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    var tokens: Int {
+        get { defaults.object(forKey: key) as? Int ?? 0 }
+        set { defaults.set(newValue, forKey: key) }
+    }
+}
+//
+//  SubscriptionServiceImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+
+import Foundation
+
+/// Реализация заглушки подписки для v1.
+/// Сейчас: локальный флаг в UserDefaults. Далее заменим на Apphud SDK.
+final class SubscriptionServiceImpl: SubscriptionService {
+    private let defaults: UserDefaults
+    private let key = "cb.subscribed.v1"
+
+    private(set) var isSubscribed: Bool
+
+    // MARK: - Init
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.isSubscribed = defaults.bool(forKey: key)
+    }
+
+    // MARK: - SubscriptionService
+
+    @discardableResult
+    func refreshStatus() async throws -> Bool {
+        // V1: читаем локально. Позже — запрос в Apphud.
+        isSubscribed = defaults.bool(forKey: key)
+        return isSubscribed
+    }
+
+    @discardableResult
+    func purchase(plan: SubscriptionPlan) async throws {
+           // V1: план игнорируем, просто считаем покупку успешной.
+           // (Позже здесь будет вызов Apphud/StoreKit2.)
+           isSubscribed = true
+           defaults.set(true, forKey: key)
+       }
+
+    @discardableResult
+    func restore() async throws {
+           // V1: читаем локальный флаг. Позже — Apphud.restore().
+           isSubscribed = defaults.bool(forKey: key)
+       }
+    
+    
 }
 //
 //  SearchRepositoryImpl.swift
@@ -797,6 +1089,39 @@ final class TaskPollerImpl: TaskPoller {
     }
 }
 //
+//  SubscriptionServiceStub.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+
+
+import Foundation
+
+/// Заглушка до интеграции Apphud/StoreKit 2.
+/// Успешно "покупает" или "восстанавливает" и включает premium.
+final class SubscriptionServiceStub: SubscriptionService {
+
+    private var store: PremiumStore
+
+    init(store: PremiumStore) {
+        self.store = store
+    }
+
+    func purchase(plan: SubscriptionPlan) async throws {
+        // Микрозадержка, имитация сети
+        try await Task.sleep(nanoseconds: 400_000_000)
+        store.isPremium = true
+    }
+
+    func restore() async throws {
+        try await Task.sleep(nanoseconds: 300_000_000)
+        // В заглушке считаем, что покупки были — включаем premium
+        store.isPremium = true
+    }
+}
+//
 //  AuthRepositoryImpl.swift
 //  CheaterBuster
 //
@@ -836,6 +1161,53 @@ final class AuthRepositoryImpl: AuthRepository {
         tokens.accessToken = token.access_token
     }
 }//
+//  UserServiceImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+
+//
+//  UserServiceImpl.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/30/25.
+//
+
+import Foundation
+
+final class UserServiceImpl: UserService {
+    private let cfg: APIConfig
+    private let http: HTTPClient
+    private let tokensStorage: TokenStorage
+    private var tokensStore: TokensStore
+
+    init(cfg: APIConfig,
+         http: HTTPClient,
+         tokensStorage: TokenStorage,
+         tokensStore: TokensStore)
+    {
+        self.cfg = cfg
+        self.http = http
+        self.tokensStorage = tokensStorage
+        self.tokensStore = tokensStore
+    }
+
+    func fetchMe() async throws -> UserReadDTO {
+        let url = cfg.baseURL.appendingPathComponent("/api/user/me")
+        var req = URLRequest(url: url)
+        // MARK: - Added: auth header
+        if let t = tokensStorage.accessToken {
+            req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization")
+        }
+        let me: UserReadDTO = try await http.send(req)
+        // Пишем баланс токенов в локальный стор (используем далее в UI/гейте)
+        tokensStore.tokens = me.tokens
+        return me
+    }
+}
+//
 //  HistoryStoreImpl.swift
 //  CheaterBuster
 //
@@ -1158,10 +1530,36 @@ final class CheaterAPIImpl: CheaterAPI {
     }
 }
 //
-//  SearchRepository.swift
+//  TokensStore.swift
 //  CheaterBuster
 //
-//  Created by Niiaz Khasanov on 10/29/25.
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+
+import Foundation
+
+public protocol TokensStore {
+    var tokens: Int { get set }
+}
+//
+//  PremiumStore.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+import Foundation
+
+public protocol PremiumStore {
+    /// Флаг подписки. В первой итерации — просто boolean.
+    var isPremium: Bool { get set }
+}
+//
+//  PermissionsManager.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
 //
 
 
@@ -1169,14 +1567,26 @@ final class CheaterAPIImpl: CheaterAPI {
 
 import Foundation
 
-/// Низкоуровневый доступ к reverse image search API.
-/// Репозиторий ничего не знает о Combine/SwiftUI и не занимается поллингом.
-protocol SearchRepository {
-    /// Создать задачу reverse-search и вернуть её id.
-    func createReverseSearch(image: Data, filename: String, mimeType: String) async throws -> UUID
+public protocol PermissionsManager {
+    func status(of permission: Permission) async -> PermissionStatus
+    func request(_ permission: Permission) async -> PermissionStatus
+}
 
-    /// Получить состояние/результат по taskId.
-    func getReverseSearch(taskId: UUID) async throws -> ReverseSearchGetResponse
+public enum Permission: Sendable {
+    case tracking
+    case notifications
+    case photoLibrary
+    case camera
+    case files // документ-пикер (на iOS отдельного пермишна нет, см. реализацию)
+}
+
+public enum PermissionStatus: Equatable, Sendable {
+    case authorized
+    case denied
+    case notDetermined
+    case restricted
+    case temporarilyUnavailable  // сеть/система не готова
+    case unsupported             // платформа не поддерживает
 }
 //
 //  TaskPoller.swift
@@ -1379,6 +1789,63 @@ import Foundation
 
 public protocol SettingsStore {
     var isHistoryEnabled: Bool { get set }
+}
+//
+//  UserService.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+
+import Foundation
+
+ protocol UserService {
+    /// Читает профиль пользователя с бэкенда.
+    func fetchMe() async throws -> UserReadDTO
+}
+//
+//  SubscriptionPlan.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+
+import Foundation
+
+public enum SubscriptionPlan: Equatable {
+    case monthly
+    case yearly
+}
+
+public protocol SubscriptionService {
+    /// Покупка выбранного плана (заглушка Apphud на D2).
+    func purchase(plan: SubscriptionPlan) async throws
+
+    /// Восстановление покупок.
+    func restore() async throws
+}
+//
+//  SearchRepository.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+
+
+
+import Foundation
+
+/// Низкоуровневый доступ к reverse image search API.
+/// Репозиторий ничего не знает о Combine/SwiftUI и не занимается поллингом.
+protocol SearchRepository {
+    /// Создать задачу reverse-search и вернуть её id.
+    func createReverseSearch(image: Data, filename: String, mimeType: String) async throws -> UUID
+
+    /// Получить состояние/результат по taskId.
+    func getReverseSearch(taskId: UUID) async throws -> ReverseSearchGetResponse
 }
 //
 //  TaskDTO.swift
@@ -1663,25 +2130,195 @@ public struct CheaterRecord: Identifiable, Hashable, Codable {
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 //
-//  SettingsView.swift
+//  SettingsScreen.swift
 //  CheaterBuster
 //
 //  Created by Niiaz Khasanov on 10/28/25.
 //
 
 import SwiftUI
+import Swinject
+import StoreKit // MARK: - Added
 
 struct SettingsScreen: View {
-    @State private var isHistoryEnabled = true
+    @StateObject private var vm: SettingsViewModel
+
+    @Environment(\.resolver) private var resolver
+    @State private var showPaywall = false
+
+    // MARK: - Added (константы)
+    private let supportEmail = "support@cheaterbuster.app"
+    private let termsURL = URL(string: "https://cheaterbuster.app/terms")!
+    private let privacyURL = URL(string: "https://cheaterbuster.app/privacy")!
+    private let shareText = "Cheater Buster — check profiles and chats: https://cheaterbuster.app"
+
+    // MARK: - Added (share sheet)
+    @State private var showShareSheet = false
+
+    init(vm: SettingsViewModel) {
+        _vm = StateObject(wrappedValue: vm)
+    }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Toggle("Save history", isOn: $isHistoryEnabled)
+            ScrollView {
+                VStack(spacing: Tokens.Spacing.x24) {
+
+                    // Блок Premium
+                    groupCard {
+                        navRow(
+                            system: "chart.bar.doc.horizontal.fill",
+                            tint: Tokens.Color.accent,
+                            title: "Get a premium"
+                        ) {
+                            showPaywall = true
+                        }
+
+                        Divider().padding(.leading, 52)
+
+                        navRow(
+                            system: "arrow.clockwise.circle.fill",
+                            tint: Tokens.Color.accent,
+                            title: "Restore purchases"
+                        ) {
+                            // Восстановление доступно на Paywall — оставляем текущий поток (не меняем контракты)
+                            showPaywall = true
+                        }
+                    }
+
+                    // Блок Info
+                    groupCard {
+                        navRow(system: "bubble.left.and.bubble.right.fill",
+                               tint: Tokens.Color.accent,
+                               title: "Support") {
+                            openSupport()
+                        }
+
+                        Divider().padding(.leading, 52)
+
+                        navRow(system: "doc.text.fill",
+                               tint: Tokens.Color.accent,
+                               title: "Terms of Use") {
+                            openURL(termsURL)
+                        }
+
+                        Divider().padding(.leading, 52)
+
+                        navRow(system: "shield.fill",
+                               tint: Tokens.Color.accent,
+                               title: "Privacy Policy") {
+                            openURL(privacyURL)
+                        }
+                    }
+
+                    // Блок Rate/Share
+                    groupCard {
+                        navRow(system: "star.fill",
+                               tint: Tokens.Color.accent,
+                               title: "Rate Us") {
+                            SKStoreReviewController.requestReview()
+                        }
+
+                        Divider().padding(.leading, 52)
+
+                        navRow(system: "square.and.arrow.up.fill",
+                               tint: Tokens.Color.accent,
+                               title: "Share with friends") {
+                            showShareSheet = true
+                        }
+                    }
+
+                    // Опция «Save history»
+                    groupCard {
+                        HStack(spacing: Tokens.Spacing.x12) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .foregroundStyle(Tokens.Color.accent)
+                                .frame(width: 28, height: 28)
+                            Toggle("Save history", isOn: $vm.isHistoryEnabled)
+                                .tint(Tokens.Color.accent)
+                        }
+                        .padding(.horizontal, Tokens.Spacing.x12)
+                        .padding(.vertical, Tokens.Spacing.x12)
+                    }
+                }
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.top, Tokens.Spacing.x16)
             }
+            .background(Tokens.Color.backgroundMain.ignoresSafeArea())
             .navigationTitle("Settings")
         }
+        .sheet(isPresented: $showPaywall) {
+            // Resolve VM из DI при показе
+            let paywallVM = resolver.resolve(PaywallViewModel.self)!
+            PaywallView(vm: paywallVM)
+                .presentationDetents([.large])
+        }
+        // MARK: - Added: Share sheet
+        .sheet(isPresented: $showShareSheet) {
+            ActivityView(activityItems: [shareText])
+        }
     }
+
+    // MARK: - UI helpers
+
+    @ViewBuilder
+    private func groupCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            content()
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Tokens.Color.surfaceCard)
+        )
+        .apply(Tokens.Shadow.card)
+    }
+
+    private func navRow(system: String, tint: Color, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: Tokens.Spacing.x12) {
+                Image(systemName: system)
+                    .foregroundStyle(tint)
+                    .frame(width: 28, height: 28)
+
+                Text(title)
+                    .font(Tokens.Font.body)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(Tokens.Color.textSecondary.opacity(0.8))
+            }
+            .padding(.horizontal, Tokens.Spacing.x12)
+            .padding(.vertical, Tokens.Spacing.x12)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Added: helpers
+
+    private func openURL(_ url: URL) {
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+    }
+
+    private func openSupport() {
+        // Пытаемся mailto:, при неудаче — откроем сайт поддержки
+        let mailto = URL(string: "mailto:\(supportEmail)")!
+        if UIApplication.shared.canOpenURL(mailto) {
+            UIApplication.shared.open(mailto, options: [:], completionHandler: nil)
+        } else {
+            openURL(URL(string: "https://cheaterbuster.app/support")!)
+        }
+    }
+}
+
+// MARK: - Added: UIKit activity wrapper (внутри файла, чтобы не плодить слоёв)
+private struct ActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }
 //
 //  SettingsViewModel.swift
@@ -1689,7 +2326,6 @@ struct SettingsScreen: View {
 //
 //  Created by Niiaz Khasanov on 10/29/25.
 //
-
 
 import Foundation
 import Combine
@@ -1859,16 +2495,19 @@ final class SearchViewModel: ObservableObject {
 import SwiftUI
 import PhotosUI
 import UIKit
+import Swinject // MARK: - Added
 
 struct FaceSearchView: View {
     @ObservedObject var vm: SearchViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.resolver) private var resolver // MARK: - Added
 
     @State private var item: PhotosPickerItem?
     @State private var image: UIImage?
 
     @State private var goResults = false
     @State private var didAnalyze = false
+    @State private var showPaywall = false // MARK: - Added
 
     var body: some View {
         ZStack {
@@ -1932,7 +2571,7 @@ struct FaceSearchView: View {
         }
         .navigationBarBackButtonHidden(true)
 
-        // Bottom tools panel (как на макете)
+        // Bottom tools panel
         .safeAreaInset(edge: .bottom) {
             HStack(spacing: Tokens.Spacing.x16) {
                 CircleTool(system: "rotate.left")  { /* позже */ }
@@ -1945,6 +2584,12 @@ struct FaceSearchView: View {
                 Button {
                     guard let img = image,
                           let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
+                    // MARK: - Added (premium gate)
+                    let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                    guard isPremium else {
+                        showPaywall = true
+                        return
+                    }
                     didAnalyze = true
                     vm.runImageSearch(jpegData: jpeg)
                 } label: {
@@ -1969,7 +2614,7 @@ struct FaceSearchView: View {
             )
         }
 
-        
+        // Photos picker
         .photosPicker(isPresented: Binding(
             get: { image == nil && item == nil }, set: { _ in }
         ), selection: $item, matching: .images)
@@ -1982,7 +2627,7 @@ struct FaceSearchView: View {
             }
         }
 
-        
+        // Навигация к результатам
         .onChange(of: vm.isLoading) { was, isNow in
             if didAnalyze && was == true && isNow == false {
                 didAnalyze = false
@@ -1993,7 +2638,7 @@ struct FaceSearchView: View {
             SearchResultsView(results: vm.results, mode: .face)
         }
 
-        
+        // Блокирующая "загрузка"
         .fullScreenCover(
             isPresented: Binding(
                 get: { vm.isBlockingLoading },
@@ -2002,6 +2647,13 @@ struct FaceSearchView: View {
         ) {
             LoadingView(mode: .face, previewImage: image, cancelAction: nil)
                 .interactiveDismissDisabled(true)
+        }
+
+        // MARK: - Added Paywall
+        .sheet(isPresented: $showPaywall) {
+            let paywallVM = resolver.resolve(PaywallViewModel.self)!
+            PaywallView(vm: paywallVM)
+                .presentationDetents([.large])
         }
     }
 }
@@ -2113,13 +2765,16 @@ private struct CardRow: View {
 //
 
 import SwiftUI
+import Swinject // MARK: - Added
 
 struct NameSearchView: View {
     @ObservedObject var vm: SearchViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.resolver) private var resolver // MARK: - Added
 
     @State private var goResults = false
     @State private var didSubmit = false
+    @State private var showPaywall = false // MARK: - Added
 
     var body: some View {
         ZStack {
@@ -2173,6 +2828,12 @@ struct NameSearchView: View {
                     isLoading: vm.isLoading,
                     isDisabled: vm.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || vm.isLoading
                 ) {
+                    // MARK: - Added (premium gate)
+                    let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                    guard isPremium else {
+                        showPaywall = true
+                        return
+                    }
                     didSubmit = true
                     vm.runNameSearch()
                 }
@@ -2185,7 +2846,7 @@ struct NameSearchView: View {
             )
         }
 
-        
+        // Переход к результатам после завершения загрузки
         .onChange(of: vm.isLoading) { was, isNow in
             if didSubmit && was == true && isNow == false {
                 didSubmit = false
@@ -2196,7 +2857,7 @@ struct NameSearchView: View {
             SearchResultsView(results: vm.results, mode: .name)
         }
 
-        
+        // Блокирующая "загрузка"
         .fullScreenCover(
             isPresented: Binding(
                 get: { vm.isBlockingLoading },
@@ -2205,6 +2866,13 @@ struct NameSearchView: View {
         ) {
             LoadingView(mode: .name, previewImage: nil, cancelAction: nil)
                 .interactiveDismissDisabled(true)
+        }
+
+        // MARK: - Added Paywall
+        .sheet(isPresented: $showPaywall) {
+            let paywallVM = resolver.resolve(PaywallViewModel.self)!
+            PaywallView(vm: paywallVM)
+                .presentationDetents([.large])
         }
     }
 }
@@ -2519,11 +3187,14 @@ final class HistoryViewModel: ObservableObject {
 
 import SwiftUI
 import UIKit
+import Swinject // MARK: - Added
 
 struct HistoryView: View {
     @StateObject private var vm: HistoryViewModel
     @EnvironmentObject private var router: AppRouter
+    @Environment(\.resolver) private var resolver // MARK: - Added
     @State private var goResults = false
+    @State private var showPaywall = false // MARK: - Added
 
     init(vm: HistoryViewModel) {
         _vm = StateObject(wrappedValue: vm)
@@ -2551,6 +3222,12 @@ struct HistoryView: View {
                     CheaterResultView(record: rec)
                 }
         }
+        // MARK: - Added Paywall
+        .sheet(isPresented: $showPaywall) {
+            let paywallVM = resolver.resolve(PaywallViewModel.self)!
+            PaywallView(vm: paywallVM)
+                .presentationDetents([.large])
+        }
     }
 
     private var content: some View {
@@ -2573,9 +3250,17 @@ struct HistoryView: View {
             Group {
                 if vm.segment == .search {
                     topBarClear(isHidden: vm.items.isEmpty) { vm.clearSearch() }
-                    SearchList(items: vm.items) { rec in vm.onTapSearch(rec) }
-                        .padding(.horizontal, Tokens.Spacing.x16)
-                        .padding(.top, Tokens.Spacing.x16)
+                    SearchList(items: vm.items) { rec in
+                        // MARK: - Added (premium gate for re-run)
+                        let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                        if isPremium {
+                            vm.onTapSearch(rec)
+                        } else {
+                            showPaywall = true
+                        }
+                    }
+                    .padding(.horizontal, Tokens.Spacing.x16)
+                    .padding(.top, Tokens.Spacing.x16)
                 } else {
                     topBarClear(isHidden: vm.cheaterItems.isEmpty) { vm.clearCheater() }
                     CheaterList(items: vm.cheaterItems) { rec in vm.onTapCheater(rec) }
@@ -2586,22 +3271,8 @@ struct HistoryView: View {
             Spacer(minLength: 0)
         }
     }
-    @ViewBuilder
-       private func topBarClear(isHidden: Bool, action: @escaping () -> Void) -> some View {
-           HStack {
-               Spacer()
-               if !isHidden {
-                   Button("Clear") { action() }
-                       .font(Tokens.Font.caption)
-                       .foregroundStyle(Tokens.Color.accent)
-               }
-           }
-           .padding(.horizontal, Tokens.Spacing.x16)
-           .padding(.top, Tokens.Spacing.x8)
-       }
-}
 
-
+    // MARK: - Added (фикс дубликата): единая версия topBarClear, без второй копии и без лишней скобки
     @ViewBuilder
     private func topBarClear(isHidden: Bool, action: @escaping () -> Void) -> some View {
         HStack {
@@ -2615,9 +3286,10 @@ struct HistoryView: View {
         .padding(.horizontal, Tokens.Spacing.x16)
         .padding(.top, Tokens.Spacing.x8)
     }
-
+}
 
 // MARK: - Search list (исправлено под HistoryRecord)
+import SwiftUI
 
 private struct SearchList: View {
     let items: [HistoryRecord]
@@ -2699,7 +3371,6 @@ private struct SearchRow: View {
 }
 
 // MARK: - Cheater list (без изменений)
-
 private struct CheaterList: View {
     let items: [CheaterRecord]
     let onTap: (CheaterRecord) -> Void
@@ -2770,8 +3441,7 @@ private struct CheaterRow: View {
     }
 }
 
-// MARK: - DateFormatter (локальный)
-
+// MARK: - DateFormatter
 private extension DateFormatter {
     static let historyDate: DateFormatter = {
         let df = DateFormatter()
@@ -2781,8 +3451,7 @@ private extension DateFormatter {
     }()
 }
 
-// MARK: - Segment
-
+// MARK: - Segment (без изменений)
 private struct SegmentCapsule: View {
     @Binding var selected: HistoryViewModel.Segment
     @ObservedObject var router: AppRouter
@@ -2804,7 +3473,7 @@ private struct SegmentCapsule: View {
     private func seg(_ title: String, _ seg: HistoryViewModel.Segment) -> some View {
         Button {
             selected = seg
-            router.rememberHistorySegment(seg) // ✅ запоминаем выбор
+            router.rememberHistorySegment(seg)
         } label: {
             Text(title)
                 .font(Tokens.Font.caption)
@@ -2829,15 +3498,15 @@ private struct SegmentCapsule: View {
 //  Created by Niiaz Khasanov on 10/28/25.
 //
 
-
-
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
+import Swinject // MARK: - Added
 
 struct CheaterView: View {
     @ObservedObject var vm: CheaterViewModel
     @EnvironmentObject private var router: AppRouter
+    @Environment(\.resolver) private var resolver // MARK: - Added
 
     // PhotosPicker
     @State private var photoItem: PhotosPickerItem?
@@ -2851,6 +3520,9 @@ struct CheaterView: View {
 
     // Alert after saving
     @State private var showSavedAlert = false
+
+    // MARK: - Added
+    @State private var showPaywall = false
 
     init(vm: CheaterViewModel) {
         self.vm = vm
@@ -2917,6 +3589,13 @@ struct CheaterView: View {
             }
             Button("OK", role: .cancel) { }
         }
+
+        // MARK: - Added Paywall
+        .sheet(isPresented: $showPaywall) {
+            let paywallVM = resolver.resolve(PaywallViewModel.self)!
+            PaywallView(vm: paywallVM)
+                .presentationDetents([.large])
+        }
     }
 
     // MARK: - Content
@@ -2939,7 +3618,7 @@ struct CheaterView: View {
         }
     }
 
-    // MARK: - Subviews (без изменений ниже)
+    // MARK: - Subviews (без изменений ниже, кроме premium-гейта в Анализ)
 
     private var idleView: some View {
         VStack(spacing: Tokens.Spacing.x24) {
@@ -2975,6 +3654,12 @@ struct CheaterView: View {
             }
 
             PrimaryButton("Analyse") {
+                // MARK: - Added (premium gate)
+                let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                guard isPremium else {
+                    showPaywall = true
+                    return
+                }
                 vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
             }
 
@@ -2998,6 +3683,12 @@ struct CheaterView: View {
             .padding(.top, Tokens.Spacing.x16)
 
             PrimaryButton("Analyse") {
+                // MARK: - Added (premium gate)
+                let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                guard isPremium else {
+                    showPaywall = true
+                    return
+                }
                 vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
             }
 
@@ -3336,5 +4027,271 @@ final class CheaterViewModel: ObservableObject {
         case "txt":        return "text/plain"
         default:           return "application/octet-stream"
         }
+    }
+}
+//
+//  PaywallView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+import SwiftUI
+import Combine
+
+struct PaywallView: View {
+    @ObservedObject var vm: PaywallViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Верхняя иллюстрация
+            Image(systemName: "person.crop.square.fill")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 180)
+                .foregroundStyle(Tokens.Color.accent.opacity(0.8))
+                .padding(.top, Tokens.Spacing.x24)
+
+            // Заголовок
+            Text("Unlock the full power of AI")
+                .font(Tokens.Font.title)
+                .foregroundStyle(Tokens.Color.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.top, Tokens.Spacing.x16)
+
+            // Фича-лист (упрощённый один айтем как на макете)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Tokens.Color.surfaceCard)
+                .overlay(
+                    HStack(alignment: .center, spacing: Tokens.Spacing.x12) {
+                        Image(systemName: "heart.text.square")
+                            .foregroundStyle(Tokens.Color.accent)
+                            .font(.system(size: 22, weight: .semibold))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Check your partner")
+                                .font(Tokens.Font.body)
+                                .foregroundStyle(Tokens.Color.textPrimary)
+                            Text("Discover if your partner’s photos appear elsewhere.")
+                                .font(Tokens.Font.captionRegular)
+                                .foregroundStyle(Tokens.Color.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, Tokens.Spacing.x16)
+                )
+                .frame(height: 88)
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.top, Tokens.Spacing.x16)
+                .apply(Tokens.Shadow.card)
+
+            // Планы
+            VStack(spacing: Tokens.Spacing.x12) {
+                planRow(
+                    title: "$9.99 / month",
+                    subtitle: nil,
+                    selected: vm.selected == .monthly
+                ) { vm.selected = .monthly }
+
+                planRow(
+                    title: "$69.99 / year",
+                    subtitle: "$5.83 / month billed annually",
+                    selected: vm.selected == .yearly,
+                    highlighted: true,
+                    badge: "Save 41%"
+                ) { vm.selected = .yearly }
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.top, Tokens.Spacing.x16)
+
+            Text("Cancel at any time")
+                .font(Tokens.Font.captionRegular)
+                .foregroundStyle(Tokens.Color.textSecondary)
+                .padding(.top, Tokens.Spacing.x16)
+
+            // CTA
+            PrimaryButton(
+                vm.isProcessing ? "Processing..." : "Continue",
+                isLoading: vm.isProcessing,
+                isDisabled: vm.isProcessing
+            ) {
+                vm.buy()
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.top, Tokens.Spacing.x16)
+
+            // Нижние ссылки
+            HStack {
+                Button("Privacy Policy") { /* TODO: открыть ссылку */ }
+                Spacer()
+                Button("Recover") { vm.restore() }
+                Spacer()
+                Button("Terms of Use") { /* TODO: открыть ссылку */ }
+            }
+            .font(Tokens.Font.captionRegular)
+            .foregroundStyle(Tokens.Color.textSecondary)
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.vertical, Tokens.Spacing.x16)
+
+            Spacer(minLength: 0)
+        }
+        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+        .onChange(of: vm.didFinish) { _, done in
+            if done { dismiss() }
+        }
+        .overlay(alignment: .topTrailing) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Tokens.Color.textSecondary)
+                    .padding(12)
+                    .background(
+                        Tokens.Color.surfaceCard,
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    )
+                    .padding(.trailing, Tokens.Spacing.x16)
+                    .padding(.top, Tokens.Spacing.x16)
+            }
+            .buttonStyle(.plain)
+        }
+        .alert("Error", isPresented: .constant(vm.errorText != nil), actions: {
+            Button("OK") { vm.errorText = nil }
+        }, message: {
+            Text(vm.errorText ?? "")
+        })
+    }
+
+    // MARK: - Subviews
+
+    private func planRow(
+        title: String,
+        subtitle: String?,
+        selected: Bool,
+        highlighted: Bool = false,
+        badge: String? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: Tokens.Spacing.x12) {
+                // Radio
+                ZStack {
+                    Circle().strokeBorder(selected ? Tokens.Color.accent : Tokens.Color.borderNeutral, lineWidth: 2)
+                        .frame(width: 22, height: 22)
+                    if selected {
+                        Circle().fill(Tokens.Color.accent).frame(width: 10, height: 10)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(title)
+                            .font(Tokens.Font.body)
+                            .foregroundStyle(Tokens.Color.textPrimary)
+                            .lineLimit(1)
+
+                        if let badge {
+                            Text(badge)
+                                .font(Tokens.Font.captionRegular)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.green.opacity(0.15), in: Capsule())
+                        }
+                    }
+
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(Tokens.Font.captionRegular)
+                            .foregroundStyle(Tokens.Color.textSecondary)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.vertical, Tokens.Spacing.x12)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(
+                        highlighted ? Tokens.Color.accent : Tokens.Color.borderNeutral.opacity(0.4),
+                        lineWidth: highlighted ? 2 : 1
+                    )
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Tokens.Color.surfaceCard)
+                    )
+            )
+            .apply(Tokens.Shadow.card)
+        }
+        .buttonStyle(.plain)
+    }
+}
+//
+//  PaywallViewModel.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/31/25.
+//
+
+import Foundation
+import Combine
+
+@MainActor
+final class PaywallViewModel: ObservableObject {
+
+    // MARK: - Output
+    @Published var selected: SubscriptionPlan = .yearly
+    @Published private(set) var isProcessing: Bool = false
+    @Published var errorText: String?
+    @Published private(set) var didFinish: Bool = false
+
+    // MARK: - Deps
+    private let subscription: SubscriptionService
+
+    init(subscription: SubscriptionService) {
+        self.subscription = subscription
+    }
+
+    // MARK: - Intent
+    func buy() {
+        Task {
+            await performPurchase()
+        }
+    }
+
+    func restore() {
+        Task {
+            await performRestore()
+        }
+    }
+
+    // MARK: - Added
+    // MARK: - Private
+
+    private func performPurchase() async {
+        isProcessing = true
+        errorText = nil
+        do {
+            try await subscription.purchase(plan: selected)
+            didFinish = true
+        } catch {
+            errorText = error.localizedDescription
+        }
+        isProcessing = false
+    }
+
+    private func performRestore() async {
+        isProcessing = true
+        errorText = nil
+        do {
+            try await subscription.restore()
+            didFinish = true
+        } catch {
+            errorText = error.localizedDescription
+        }
+        isProcessing = false
     }
 }

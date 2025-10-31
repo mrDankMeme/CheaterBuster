@@ -1,15 +1,13 @@
-//
 //  SearchScreen.swift
 //  CheaterBuster
 //
 //  Created by Niiaz Khasanov on 10/28/25.
 //
 
-
 import SwiftUI
 
 struct SearchScreen: View {
-    @State private var goName = false
+    // MARK: - Removed: goName (больше не нужен)
     @State private var goPhoto = false
     private let vm: SearchViewModel
 
@@ -24,11 +22,11 @@ struct SearchScreen: View {
                     .padding(.top, Tokens.Spacing.x8)
 
                 VStack(spacing: Tokens.Spacing.x12) {
-                    CardRow(
-                        icon: "text.magnifyingglass",
-                        title: "Search for a partner by name"
-                    ) { goName = true }
+                    // MARK: - Removed: карточка текстового поиска
+                    // CardRow(icon: "text.magnifyingglass",
+                    //         title: "Search for a partner by name") { goName = true }
 
+                    // Оставляем только поиск по фото
                     CardRow(
                         icon: "face.smiling",
                         title: "Finding a partner by face"
@@ -39,9 +37,8 @@ struct SearchScreen: View {
             }
             .padding(.horizontal, Tokens.Spacing.x16)
             .background(Tokens.Color.backgroundMain.ignoresSafeArea())
-            .navigationDestination(isPresented: $goName) {
-                NameSearchView(vm: vm)
-            }
+
+            // MARK: - Removed: navigationDestination для NameSearchView
             .navigationDestination(isPresented: $goPhoto) {
                 FaceSearchView(vm: vm)
             }

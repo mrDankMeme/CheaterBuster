@@ -7,12 +7,22 @@
 
 import SwiftUI
 import Swinject
+import StoreKit // MARK: - Added
 
 struct SettingsScreen: View {
     @StateObject private var vm: SettingsViewModel
 
     @Environment(\.resolver) private var resolver
     @State private var showPaywall = false
+
+    // MARK: - Added (константы)
+    private let supportEmail = "support@cheaterbuster.app"
+    private let termsURL = URL(string: "https://cheaterbuster.app/terms")!
+    private let privacyURL = URL(string: "https://cheaterbuster.app/privacy")!
+    private let shareText = "Cheater Buster — check profiles and chats: https://cheaterbuster.app"
+
+    // MARK: - Added (share sheet)
+    @State private var showShareSheet = false
 
     init(vm: SettingsViewModel) {
         _vm = StateObject(wrappedValue: vm)
@@ -40,6 +50,7 @@ struct SettingsScreen: View {
                             tint: Tokens.Color.accent,
                             title: "Restore purchases"
                         ) {
+                            // Восстановление доступно на Paywall — оставляем текущий поток (не меняем контракты)
                             showPaywall = true
                         }
                     }
@@ -49,7 +60,7 @@ struct SettingsScreen: View {
                         navRow(system: "bubble.left.and.bubble.right.fill",
                                tint: Tokens.Color.accent,
                                title: "Support") {
-                            // TODO: открыть support email/url
+                            openSupport()
                         }
 
                         Divider().padding(.leading, 52)
@@ -57,7 +68,7 @@ struct SettingsScreen: View {
                         navRow(system: "doc.text.fill",
                                tint: Tokens.Color.accent,
                                title: "Terms of Use") {
-                            // TODO: открыть Terms URL
+                            openURL(termsURL)
                         }
 
                         Divider().padding(.leading, 52)
@@ -65,7 +76,7 @@ struct SettingsScreen: View {
                         navRow(system: "shield.fill",
                                tint: Tokens.Color.accent,
                                title: "Privacy Policy") {
-                            // TODO: открыть Privacy URL
+                            openURL(privacyURL)
                         }
                     }
 
@@ -74,7 +85,7 @@ struct SettingsScreen: View {
                         navRow(system: "star.fill",
                                tint: Tokens.Color.accent,
                                title: "Rate Us") {
-                            // TODO: SKStoreReviewController или кастомный экран
+                            SKStoreReviewController.requestReview()
                         }
 
                         Divider().padding(.leading, 52)
@@ -82,11 +93,11 @@ struct SettingsScreen: View {
                         navRow(system: "square.and.arrow.up.fill",
                                tint: Tokens.Color.accent,
                                title: "Share with friends") {
-                            // TODO: Share link
+                            showShareSheet = true
                         }
                     }
 
-                    // Опция «Save history» из ранних экранов оставляем внизу
+                    // Опция «Save history»
                     groupCard {
                         HStack(spacing: Tokens.Spacing.x12) {
                             Image(systemName: "clock.arrow.circlepath")
@@ -110,6 +121,10 @@ struct SettingsScreen: View {
             let paywallVM = resolver.resolve(PaywallViewModel.self)!
             PaywallView(vm: paywallVM)
                 .presentationDetents([.large])
+        }
+        // MARK: - Added: Share sheet
+        .sheet(isPresented: $showShareSheet) {
+            ActivityView(activityItems: [shareText])
         }
     }
 
@@ -148,4 +163,29 @@ struct SettingsScreen: View {
         }
         .buttonStyle(.plain)
     }
+
+    // MARK: - Added: helpers
+
+    private func openURL(_ url: URL) {
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+    }
+
+    private func openSupport() {
+        // Пытаемся mailto:, при неудаче — откроем сайт поддержки
+        let mailto = URL(string: "mailto:\(supportEmail)")!
+        if UIApplication.shared.canOpenURL(mailto) {
+            UIApplication.shared.open(mailto, options: [:], completionHandler: nil)
+        } else {
+            openURL(URL(string: "https://cheaterbuster.app/support")!)
+        }
+    }
+}
+
+// MARK: - Added: UIKit activity wrapper (внутри файла, чтобы не плодить слоёв)
+private struct ActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }

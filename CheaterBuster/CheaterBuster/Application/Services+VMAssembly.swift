@@ -126,5 +126,10 @@ final class ServicesAssembly: Assembly {
         container.register(PaywallViewModel.self) { r in
             PaywallViewModel(subscription: r.resolve(SubscriptionService.self)!)
         }
+       
+        container.register(PermissionsManager.self) { _ in
+            PermissionsManagerImpl()
+        }.inObjectScope(.container)
+
     }
 }
