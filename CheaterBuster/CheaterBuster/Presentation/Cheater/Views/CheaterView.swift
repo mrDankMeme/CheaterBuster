@@ -34,7 +34,7 @@ struct CheaterView: View {
     // Bottom sheet
     @State private var showSourceSheet = false
 
-    // Сохраняем последнюю картинку для превью/загрузки
+    // Превью изображения, чтобы показывать и на экране прогресса
     @State private var lastPreviewImage: UIImage? = nil
 
     private enum CheaterRoute: Hashable {
@@ -130,23 +130,26 @@ struct CheaterView: View {
             // --- Навигация по состояниям VM
             .onChange(of: vm.state) { _, newState in
                 switch newState {
-                case .uploading:
+                case .uploading(let p):
+                    // пушим экран прогресса; свайп назад должен работать
                     if path.last != .uploading { path.append(.uploading) }
+                    // (ничего больше не делаем — UI сам считает проценты)
                 case .result(let r):
-                    routedResult = r // результат открываем ТОЛЬКО по кнопке
+                    // показываем результат только по кнопке
+                    routedResult = r
                 default:
                     break
                 }
             }
 
-            // --- Возврат на корень => idle
+            // --- Возврат на корень => жёсткий сброс VM
             .onChange(of: path) { _, newPath in
                 if newPath.isEmpty, vm.state != .idle {
                     vm.goBackToIdle()
                 }
             }
 
-            // --- Экран назначения
+            // --- Экраны
             .navigationDestination(for: CheaterRoute.self) { route in
                 switch route {
                 case .imagePreview:
@@ -158,18 +161,24 @@ struct CheaterView: View {
                         }
                     }
                     .navigationBarBackButtonHidden(true)
+                    // свайп-назад (кастомный) — на всякий случай, чтобы он точно работал
+                    .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
 
                 case .uploading:
                     switch vm.state {
                     case .uploading(let p):
                         uploadingView(progress: p)
                             .navigationBarBackButtonHidden(true)
+                            // свайп-назад (кастомный), без алёртов
+                            .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
                     case .result:
                         uploadingView(progress: 100)
                             .navigationBarBackButtonHidden(true)
+                            .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
                     default:
                         uploadingView(progress: 0)
                             .navigationBarBackButtonHidden(true)
+                            .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
                     }
 
                 case .result:
@@ -180,18 +189,20 @@ struct CheaterView: View {
                             onSelectMessage: { withAnimation(.easeOut(duration: 0.2)) { showSourceSheet = true } }
                         )
                         .navigationBarBackButtonHidden(true)
+                        .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
                     } else {
                         VStack { Text("No result").foregroundColor(.red); Spacer() }
                             .navigationBarBackButtonHidden(true)
+                            .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
                     }
                 }
             }
         }
-        // MARK: - Added: кастомный edge-swipe pop работает ВСЕГДА
-        .edgeSwipeToPop(isEnabled: !path.isEmpty) { _ = path.popLast() }
+        // Включаем системный свайп (если у тебя подключён enableInteractivePop — оставь)
+        .enableInteractivePop()
     }
 
-    // Корневой экран NavigationStack: показываем только idle
+    // Корневой контент
     @ViewBuilder
     private var content: some View {
         switch vm.state {
@@ -234,9 +245,8 @@ struct CheaterView: View {
                 PrimaryButton("Analyse") {
                     let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
                     guard isPremium else { showPaywall = true; return }
-                    if let img = lastPreviewImage { vm.showImage(img) } // гарантируем вход
+                    if let img = lastPreviewImage { vm.showImage(img) }
                     vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
-                    // Дальше vm.state -> .uploading и мы пушим .uploading через onChange
                 }
             }
             .padding(.horizontal, 16.scale)
@@ -246,6 +256,7 @@ struct CheaterView: View {
         .background(Tokens.Color.backgroundMain.ignoresSafeArea())
     }
 
+    // СТАРЫЙ ПРОГРЕСС-UI (вернул как просил)
     private func uploadingView(progress p: Int) -> some View {
         VStack(spacing: 0) {
             header
@@ -286,7 +297,7 @@ struct CheaterView: View {
         HStack {
             BackButton(size: 44.scale) {
                 if !path.isEmpty {
-                    _ = path.popLast() // корретный pop; на корень — reset через onChange(path)
+                    _ = path.popLast()
                 } else {
                     vm.goBackToIdle()
                 }

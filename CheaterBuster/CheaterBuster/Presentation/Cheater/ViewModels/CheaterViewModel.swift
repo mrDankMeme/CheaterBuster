@@ -24,31 +24,24 @@ final class CheaterViewModel: ObservableObject {
             switch (lhs, rhs) {
             case (.idle, .idle):
                 return true
-
             case let (.previewImage(lImg), .previewImage(rImg)):
-                // ⚠️ UIImage не поддерживает Equatable.
-                // Можно сравнить по data или hash.
+                // ⚠️ UIImage не поддерживает Equatable — сравним по data.
                 return lImg.pngData() == rImg.pngData()
-
             case let (.previewFile(lName, lData), .previewFile(rName, rData)):
                 return lName == rName && lData == rData
-
-            case let (.uploading(lProgress), .uploading(rProgress)):
-                return lProgress == rProgress
-
-            case let (.result(lResult), .result(rResult)):
-                return lResult == rResult  // если TaskResult : Equatable
-
-            case let (.error(lMsg), .error(rMsg)):
-                return lMsg == rMsg
-
+            case let (.uploading(l), .uploading(r)):
+                return l == r
+            case let (.result(l), .result(r)):
+                return l == r
+            case let (.error(l), .error(r)):
+                return l == r
             default:
                 return false
             }
         }
     }
 
-    @Published  var state: State = .idle
+    @Published var state: State = .idle
 
     // E8: храним последний результат (для Save/Share)
     private var lastKind: CheaterRecord.Kind?
@@ -63,6 +56,9 @@ final class CheaterViewModel: ObservableObject {
     private let store: CheaterStore
     private let cfg: APIConfig
 
+    // MARK: - Added: управление текущим анализом
+    private var currentAnalysisTask: Task<Void, Never>? = nil
+
     init(auth: AuthRepository, api: CheaterAPI, poller: TaskPoller, store: CheaterStore, cfg: APIConfig) {
         self.auth = auth; self.api = api; self.poller = poller; self.store = store; self.cfg = cfg
     }
@@ -73,29 +69,44 @@ final class CheaterViewModel: ObservableObject {
     /// Публичный метод, чтобы экран мог показать ошибку, не трогая `state` напрямую.
     func presentError(_ message: String) { state = .error(message) }
 
-    /// Старт анализа, теперь **не** сохраняем авто в историю — ждём явного Save.
-    func analyseCurrent(conversation: String? = nil, apphudId: String) {
-        Task {
-            do {
-                try await auth.ensureAuthorized(apphudId: apphudId)
+    // MARK: - Added: отмена/сброс анализа
+    func cancelCurrentAnalysis() {
+        currentAnalysisTask?.cancel()
+        currentAnalysisTask = nil
+    }
 
-                switch state {
+    // MARK: - Changed: старт анализа теперь хранит Task и уважает отмену
+    func analyseCurrent(conversation: String? = nil, apphudId: String) {
+        // На всякий случай убьём предыдущий анализ, если был
+        cancelCurrentAnalysis()
+
+        currentAnalysisTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.auth.ensureAuthorized(apphudId: apphudId)
+
+                switch self.state {
                 case .previewImage(let img):
                     guard let data = img.jpegData(compressionQuality: 0.9) else { throw APIError.noData }
-                    try await runTask(files: [
-                        .init(name: "files", filename: "image.jpg", mimeType: "image/jpeg", data: data)
-                    ], conversation: conversation, kind: .image)
+                    try await self.runTask(
+                        files: [.init(name: "files", filename: "image.jpg", mimeType: "image/jpeg", data: data)],
+                        conversation: conversation,
+                        kind: .image
+                    )
 
                 case .previewFile(let name, let data):
-                    try await runTask(files: [
-                        .init(name: "files", filename: name, mimeType: mime(for: name), data: data)
-                    ], conversation: conversation, kind: .file)
+                    try await self.runTask(
+                        files: [.init(name: "files", filename: name, mimeType: self.mime(for: name), data: data)],
+                        conversation: conversation,
+                        kind: .file
+                    )
 
                 default:
                     break
                 }
             } catch {
-                presentError((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+                if Task.isCancelled { return } // MARK: - Added: уважение отмены
+                self.presentError((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
             }
         }
     }
@@ -116,12 +127,26 @@ final class CheaterViewModel: ObservableObject {
 
     // MARK: - Private
 
+    private func mime(for filename: String) -> String {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        switch ext {
+        case "jpg", "jpeg": return "image/jpeg"
+        case "png": return "image/png"
+        case "pdf": return "application/pdf"
+        case "txt": return "text/plain"
+        default: return "application/octet-stream"
+        }
+    }
+
     private func runTask(files: [MultipartFormData.FilePart], conversation: String?, kind: CheaterRecord.Kind) async throws {
+        if Task.isCancelled { return }                    // MARK: - Added
         state = .uploading(progress: 10)
 
         let created = try await api.createAnalyzeTask(files: files, conversation: conversation)
+        if Task.isCancelled { return }                    // MARK: - Added
         state = .uploading(progress: 35)
 
+        // Ожидание результата, с уважением отмены
         let final: TaskReadDTO
         switch created.status {
         case .finished, .failed:
@@ -129,11 +154,11 @@ final class CheaterViewModel: ObservableObject {
         default:
             final = try await poller.waitForAnalyzeResult(taskId: created.id, interval: 1.0)
         }
+        if Task.isCancelled { return }                    // MARK: - Added
 
         switch final.status {
         case .finished:
             if case .details(let r)? = final.result {
-                // E8: не сохраняем автоматически — показываем пользователю, а затем Save.
                 lastKind = kind
                 lastResult = r
                 state = .result(r)
@@ -148,17 +173,6 @@ final class CheaterViewModel: ObservableObject {
 
         default:
             presentError("Unexpected status: \(final.status)")
-        }
-    }
-
-    private func mime(for filename: String) -> String {
-        let ext = (filename as NSString).pathExtension.lowercased()
-        switch ext {
-        case "jpg","jpeg": return "image/jpeg"
-        case "png":        return "image/png"
-        case "pdf":        return "application/pdf"
-        case "txt":        return "text/plain"
-        default:           return "application/octet-stream"
         }
     }
 }

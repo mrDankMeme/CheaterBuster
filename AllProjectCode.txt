@@ -87,49 +87,117 @@ final class InMemoryTokenStorage: TokenStorage {
 import SwiftUI
 import UIKit
 
-// MARK: - Конфигуратор, который включает нативный интерактивный "свайп назад"
+/// Включает системный интерактивный "свайп от левого края" для NavigationStack.
+/// НИКАКИХ своих делегатов — используем стандартную реализацию UINavigationController.
 struct InteractivePopConfigurator: UIViewControllerRepresentable {
-
-    // Вложенный координатор — каноничный способ для Representable
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        weak var navigationController: UINavigationController?
-
-        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            // Разрешаем свайп только если есть что "попнуть"
-            (navigationController?.viewControllers.count ?? 0) > 1
-        }
-
-        // Разрешаем одновременное распознавание, чтобы не конфликтовало со ScrollView и т.п.
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-            true
-        }
-    }
-
-    // MARK: UIViewControllerRepresentable
-    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIViewController(context: Context) -> UIViewController {
         UIViewController()
     }
 
     func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
-        guard let nav = uiViewController.navigationController else { return }
-        context.coordinator.navigationController = nav
+        guard
+            let nav = uiViewController.navigationController,
+            let pop = nav.interactivePopGestureRecognizer
+        else { return }
 
-        // Включаем и перепривязываем делегата на каждом апдейте.
-        if let pop = nav.interactivePopGestureRecognizer {
-            pop.isEnabled = true
-            pop.delegate = context.coordinator
-        }
+        pop.isEnabled = true
+        pop.delegate = nil // ← ключевой момент: вернуть системного делегата
     }
 }
 
-// Удобный модификатор для SwiftUI-вью
 public extension View {
-    /// Включает нативный "свайп от левого края" для возврата назад в текущем NavigationStack.
+    /// Подвешивает конфигуратор к текущему представлению.
     func enableInteractivePop() -> some View {
         background(InteractivePopConfigurator())
+    }
+}
+//
+//  EdgeSwipeCapture.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 11/1/25.
+//
+
+
+//
+//  EdgeSwipeBackModifier.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 11/01/25.
+//
+
+import SwiftUI
+
+/// Прозрачный "ловец" свайпа от левого края, который делает pop() в NavigationStack.
+/// Не зависит от UINavigationController. Работает поверх ScrollView и прочих жестов.
+private struct EdgeSwipeCapture: View {
+    let isEnabled: Bool
+    let edgeWidth: CGFloat
+    let triggerDistance: CGFloat
+    let onPop: () -> Void
+
+    @State private var started = false
+    @State private var startLocation: CGPoint = .zero
+
+    var body: some View {
+        // Прозрачная зона у левого края: перехватывает жест
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: edgeWidth)
+            .contentShape(Rectangle())
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 10, coordinateSpace: .local)
+                    .onChanged { value in
+                        guard isEnabled else { return }
+                        if !started {
+                            started = true
+                            startLocation = value.startLocation
+                        }
+                    }
+                    .onEnded { value in
+                        defer { started = false }
+                        guard isEnabled else { return }
+                        // Начало в зоне края?
+                        let validStart = startLocation.x <= edgeWidth + 2
+                        // Горизонтальный сдвиг вправо достаточный и без большого вертикального отклонения
+                        let dx = value.translation.width
+                        let dy = value.translation.height
+                        if validStart && dx > triggerDistance && abs(dy) < 120 {
+                            onPop()
+                        }
+                    }
+            )
+            .allowsHitTesting(isEnabled) // Чтобы не мешать, если попить нечего
+    }
+}
+
+struct EdgeSwipeBackModifier: ViewModifier {
+    let isEnabled: Bool
+    let edgeWidth: CGFloat
+    let triggerDistance: CGFloat
+    let onPop: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            // Кладём "ловец" поверх контента у левого края экрана
+            .overlay(
+                EdgeSwipeCapture(
+                    isEnabled: isEnabled,
+                    edgeWidth: edgeWidth,
+                    triggerDistance: triggerDistance,
+                    onPop: onPop
+                ),
+                alignment: .leading
+            )
+    }
+}
+
+public extension View {
+    /// Включает кастомный edge-swipe назад (pop) от левого края.
+    /// Работает в любых SwiftUI-экранах, независимо от UINavigationController.
+    func edgeSwipeToPop(isEnabled: Bool, edgeWidth: CGFloat = 24, triggerDistance: CGFloat = 60, onPop: @escaping () -> Void) -> some View {
+        modifier(EdgeSwipeBackModifier(isEnabled: isEnabled, edgeWidth: edgeWidth, triggerDistance: triggerDistance, onPop: onPop))
     }
 }
 //
@@ -4464,14 +4532,26 @@ struct CheaterView: View {
     @EnvironmentObject private var router: AppRouter
     @Environment(\.resolver) private var resolver
 
+    // PhotosPicker
     @State private var photoItem: PhotosPickerItem?
     @State private var showPhotoPicker = false
+
+    // Document picker
     @State private var showFilePicker = false
+
+    // Optional text conversation
     @State private var conversationText: String = ""
+
+    // Alert after saving
     @State private var showSavedAlert = false
+
+    // Paywall
     @State private var showPaywall = false
+
+    // Bottom sheet
     @State private var showSourceSheet = false
 
+    // Сохраняем последнюю картинку для превью/загрузки
     @State private var lastPreviewImage: UIImage? = nil
 
     private enum CheaterRoute: Hashable {
@@ -4479,6 +4559,7 @@ struct CheaterView: View {
         case uploading
         case result
     }
+
     @State private var path: [CheaterRoute] = []
     @State private var routedResult: TaskResult? = nil
 
@@ -4495,6 +4576,7 @@ struct CheaterView: View {
             .navigationTitle(navigationTitle)
             .toolbar(.hidden, for: .navigationBar)
 
+            // --- Pickers
             .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
             .fileImporter(
                 isPresented: $showFilePicker,
@@ -4517,6 +4599,7 @@ struct CheaterView: View {
                 }
             }
 
+            // --- Фото -> UIImage
             .onChange(of: photoItem) { item in
                 guard let item else { return }
                 Task {
@@ -4534,6 +4617,7 @@ struct CheaterView: View {
                 }
             }
 
+            // --- Saved alert
             .onChange(of: vm.didSave) { _, saved in
                 guard saved else { return }
                 showSavedAlert = true
@@ -4543,11 +4627,13 @@ struct CheaterView: View {
                 Button("OK", role: .cancel) { }
             }
 
+            // --- Paywall
             .fullScreenCover(isPresented: $showPaywall) {
                 let paywallVM = resolver.resolve(PaywallViewModel.self)!
                 PaywallView(vm: paywallVM).presentationDetents([.large])
             }
 
+            // --- Bottom sheet
             .overlay(alignment: .bottom) {
                 if showSourceSheet {
                     SourcePickerOverlay(
@@ -4558,25 +4644,26 @@ struct CheaterView: View {
                 }
             }
 
-            // Пушим только uploading; result показываем по кнопке
+            // --- Навигация по состояниям VM
             .onChange(of: vm.state) { _, newState in
                 switch newState {
                 case .uploading:
                     if path.last != .uploading { path.append(.uploading) }
                 case .result(let r):
-                    routedResult = r // НЕ пушим .result
+                    routedResult = r // результат открываем ТОЛЬКО по кнопке
                 default:
                     break
                 }
             }
 
-            // На корне переводим VM в idle
+            // --- Возврат на корень => idle
             .onChange(of: path) { _, newPath in
                 if newPath.isEmpty, vm.state != .idle {
                     vm.goBackToIdle()
                 }
             }
 
+            // --- Экран назначения
             .navigationDestination(for: CheaterRoute.self) { route in
                 switch route {
                 case .imagePreview:
@@ -4617,10 +4704,11 @@ struct CheaterView: View {
                 }
             }
         }
-        .enableInteractivePop() // MARK: - Added: нативный свайп-назад
+        // MARK: - Added: кастомный edge-swipe pop работает ВСЕГДА
+        .edgeSwipeToPop(isEnabled: !path.isEmpty) { _ = path.popLast() }
     }
 
-    // Корень NavigationStack: только idle
+    // Корневой экран NavigationStack: показываем только idle
     @ViewBuilder
     private var content: some View {
         switch vm.state {
@@ -4663,8 +4751,9 @@ struct CheaterView: View {
                 PrimaryButton("Analyse") {
                     let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
                     guard isPremium else { showPaywall = true; return }
-                    if let img = lastPreviewImage { vm.showImage(img) }
+                    if let img = lastPreviewImage { vm.showImage(img) } // гарантируем вход
                     vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
+                    // Дальше vm.state -> .uploading и мы пушим .uploading через onChange
                 }
             }
             .padding(.horizontal, 16.scale)
@@ -4714,7 +4803,7 @@ struct CheaterView: View {
         HStack {
             BackButton(size: 44.scale) {
                 if !path.isEmpty {
-                    _ = path.popLast()
+                    _ = path.popLast() // корретный pop; на корень — reset через onChange(path)
                 } else {
                     vm.goBackToIdle()
                 }
