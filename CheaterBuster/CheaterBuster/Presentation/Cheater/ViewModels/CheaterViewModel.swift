@@ -12,7 +12,7 @@ import Combine
 @MainActor
 final class CheaterViewModel: ObservableObject {
 
-    enum State {
+     enum State {
         case idle
         case previewImage(UIImage)
         case previewFile(name: String, data: Data)
@@ -21,7 +21,7 @@ final class CheaterViewModel: ObservableObject {
         case error(String)
     }
 
-    @Published private(set) var state: State = .idle
+    @Published  var state: State = .idle
 
     // E8: храним последний результат (для Save/Share)
     private var lastKind: CheaterRecord.Kind?

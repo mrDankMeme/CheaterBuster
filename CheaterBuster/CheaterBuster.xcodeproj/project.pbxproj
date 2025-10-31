@@ -84,6 +84,16 @@
 		A3B1349E2EB4D7A800E9486A /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B1349D2EB4D7A800E9486A /* OnboardingView.swift */; };
 		A3B134A12EB4E5CF00E9486A /* RateUsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134A02EB4E5CF00E9486A /* RateUsView.swift */; };
 		A3B134A52EB4F36600E9486A /* Scalable.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134A42EB4F36600E9486A /* Scalable.swift */; };
+		A3B134B02EB505CD00E9486A /* CheaterViewModel+InternalNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134AF2EB505C400E9486A /* CheaterViewModel+InternalNavigation.swift */; };
+		A3B134B32EB5098500E9486A /* ImageAnalysisHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134B22EB5098500E9486A /* ImageAnalysisHeader.swift */; };
+		A3B134B52EB5099400E9486A /* ImageCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134B42EB5099400E9486A /* ImageCard.swift */; };
+		A3B134B72EB5099A00E9486A /* ProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134B62EB5099A00E9486A /* ProgressBar.swift */; };
+		A3B134B92EB509A200E9486A /* SourcePickerOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134B82EB509A200E9486A /* SourcePickerOverlay.swift */; };
+		A3B134BF2EB515BD00E9486A /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134BE2EB515BA00E9486A /* Color+Hex.swift */; };
+		A3B134C12EB5160200E9486A /* RiskRingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134C02EB5160200E9486A /* RiskRingView.swift */; };
+		A3B134C42EB5161600E9486A /* LegendDot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134C32EB5161600E9486A /* LegendDot.swift */; };
+		A3B134C62EB5162200E9486A /* RedFlagCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134C52EB5162200E9486A /* RedFlagCard.swift */; };
+		A3B134C82EB5162900E9486A /* RecommendationCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134C72EB5162900E9486A /* RecommendationCard.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -165,6 +175,16 @@
 		A3B1349D2EB4D7A800E9486A /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		A3B134A02EB4E5CF00E9486A /* RateUsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateUsView.swift; sourceTree = "<group>"; };
 		A3B134A42EB4F36600E9486A /* Scalable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Scalable.swift; sourceTree = "<group>"; };
+		A3B134AF2EB505C400E9486A /* CheaterViewModel+InternalNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CheaterViewModel+InternalNavigation.swift"; sourceTree = "<group>"; };
+		A3B134B22EB5098500E9486A /* ImageAnalysisHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageAnalysisHeader.swift; sourceTree = "<group>"; };
+		A3B134B42EB5099400E9486A /* ImageCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCard.swift; sourceTree = "<group>"; };
+		A3B134B62EB5099A00E9486A /* ProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressBar.swift; sourceTree = "<group>"; };
+		A3B134B82EB509A200E9486A /* SourcePickerOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourcePickerOverlay.swift; sourceTree = "<group>"; };
+		A3B134BE2EB515BA00E9486A /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
+		A3B134C02EB5160200E9486A /* RiskRingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiskRingView.swift; sourceTree = "<group>"; };
+		A3B134C32EB5161600E9486A /* LegendDot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegendDot.swift; sourceTree = "<group>"; };
+		A3B134C52EB5162200E9486A /* RedFlagCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedFlagCard.swift; sourceTree = "<group>"; };
+		A3B134C72EB5162900E9486A /* RecommendationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendationCard.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -306,6 +326,9 @@
 		A35FF3602EB0CE310000E890 /* Cheater */ = {
 			isa = PBXGroup;
 			children = (
+				A3B134C22EB5160F00E9486A /* Result */,
+				A3B134AF2EB505C400E9486A /* CheaterViewModel+InternalNavigation.swift */,
+				A3B134B12EB5091600E9486A /* Components */,
 				A3B134A62EB4FDFF00E9486A /* Views */,
 				A3B134A82EB4FE1800E9486A /* ViewModels */,
 			);
@@ -388,6 +411,7 @@
 		A35FF3A72EB11ABE0000E890 /* Common */ = {
 			isa = PBXGroup;
 			children = (
+				A3B134BD2EB515A700E9486A /* Extensions */,
 				A35FF3A82EB11AC50000E890 /* LoadingView.swift */,
 			);
 			path = Common;
@@ -583,6 +607,36 @@
 			path = ViewModels;
 			sourceTree = "<group>";
 		};
+		A3B134B12EB5091600E9486A /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				A3B134B82EB509A200E9486A /* SourcePickerOverlay.swift */,
+				A3B134B62EB5099A00E9486A /* ProgressBar.swift */,
+				A3B134B42EB5099400E9486A /* ImageCard.swift */,
+				A3B134B22EB5098500E9486A /* ImageAnalysisHeader.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		A3B134BD2EB515A700E9486A /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				A3B134BE2EB515BA00E9486A /* Color+Hex.swift */,
+			);
+			path = Extensions;
+			sourceTree = "<group>";
+		};
+		A3B134C22EB5160F00E9486A /* Result */ = {
+			isa = PBXGroup;
+			children = (
+				A3B134C72EB5162900E9486A /* RecommendationCard.swift */,
+				A3B134C52EB5162200E9486A /* RedFlagCard.swift */,
+				A3B134C32EB5161600E9486A /* LegendDot.swift */,
+				A3B134C02EB5160200E9486A /* RiskRingView.swift */,
+			);
+			path = Result;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -660,9 +714,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				A3B1349E2EB4D7A800E9486A /* OnboardingView.swift in Sources */,
+				A3B134B52EB5099400E9486A /* ImageCard.swift in Sources */,
 				A35FF3942EB0FCF20000E890 /* Services+VMAssembly.swift in Sources */,
 				A3B134A12EB4E5CF00E9486A /* RateUsView.swift in Sources */,
 				A35FF3C22EB225B70000E890 /* MultipartFormData.swift in Sources */,
+				A3B134B92EB509A200E9486A /* SourcePickerOverlay.swift in Sources */,
 				A35FF38C2EB0F1090000E890 /* SettingsStoreImpl.swift in Sources */,
 				A35FF3EF2EB24A090000E890 /* TaskCreateResponse.swift in Sources */,
 				A35FF3FC2EB27EDD0000E890 /* SearchRepositoryImpl.swift in Sources */,
@@ -675,9 +731,11 @@
 				A35FF3712EB0D3330000E890 /* SettingsView.swift in Sources */,
 				A35FF3882EB0ED3F0000E890 /* CheaterAnalyzerServiceImpl.swift in Sources */,
 				A35FF3842EB0EA100000E890 /* SettingsStore.swift in Sources */,
+				A3B134B02EB505CD00E9486A /* CheaterViewModel+InternalNavigation.swift in Sources */,
 				A35FF3E22EB231D30000E890 /* AuthRepositoryImpl.swift in Sources */,
 				A35FF3F12EB251950000E890 /* CheaterResultView.swift in Sources */,
 				A35FF3A02EB108940000E890 /* NameSearchView.swift in Sources */,
+				A3B134B32EB5098500E9486A /* ImageAnalysisHeader.swift in Sources */,
 				A35FF3A22EB108C20000E890 /* SearchResultsView.swift in Sources */,
 				A35FF3592EB00CF10000E890 /* SearchField.swift in Sources */,
 				A35FF37A2EB0E6910000E890 /* ImageHit.swift in Sources */,
@@ -685,6 +743,8 @@
 				A35FF3F72EB275CA0000E890 /* Notification+Names.swift in Sources */,
 				A35FF3A42EB10B2C0000E890 /* Corner+Helpers.swift in Sources */,
 				A35FF3C02EB2257A0000E890 /* URLSessionHTTPClient.swift in Sources */,
+				A3B134B72EB5099A00E9486A /* ProgressBar.swift in Sources */,
+				A3B134C62EB5162200E9486A /* RedFlagCard.swift in Sources */,
 				A35FF3B12EB12DBE0000E890 /* CheaterStore.swift in Sources */,
 				A35FF3E42EB232000000E890 /* CheaterAPIImpl.swift in Sources */,
 				A35FF3D82EB22A050000E890 /* TaskPoller.swift in Sources */,
@@ -692,12 +752,14 @@
 				A35FF3902EB0F42E0000E890 /* CheaterViewModel.swift in Sources */,
 				A35FF3922EB0FC040000E890 /* HistoryViewModel.swift in Sources */,
 				A35FF3AD2EB12D790000E890 /* CheaterRecord.swift in Sources */,
+				A3B134C82EB5162900E9486A /* RecommendationCard.swift in Sources */,
 				A3B1348E2EB4C1E400E9486A /* PremiumStore.swift in Sources */,
 				A35FF3732EB0D3460000E890 /* SettingsViewModel.swift in Sources */,
 				A3B1349A2EB4CF3600E9486A /* PermissionsManagerImpl.swift in Sources */,
 				A35FF3A92EB11AC50000E890 /* LoadingView.swift in Sources */,
 				A35FF3982EB1047A0000E890 /* RootTabView.swift in Sources */,
 				A35FF3A62EB10FCD0000E890 /* FaceSearchView.swift in Sources */,
+				A3B134BF2EB515BD00E9486A /* Color+Hex.swift in Sources */,
 				A35FF3752EB0D8350000E890 /* AppAssembler.swift in Sources */,
 				A35FF3E62EB2324F0000E890 /* TaskPollerImpl.swift in Sources */,
 				A35FF3822EB0E9350000E890 /* HistoryStore.swift in Sources */,
@@ -708,6 +770,7 @@
 				A35FF3FA2EB27E9F0000E890 /* SearchRepository.swift in Sources */,
 				A3B1347C2EB4B23C00E9486A /* TokensStoreImpl.swift in Sources */,
 				A35FF39A2EB104A30000E890 /* SearchScreen.swift in Sources */,
+				A3B134C12EB5160200E9486A /* RiskRingView.swift in Sources */,
 				A35FF3802EB0E8DE0000E890 /* CheaterAnalyzerService.swift in Sources */,
 				A3B134872EB4BD9E00E9486A /* SubscriptionServiceImpl.swift in Sources */,
 				A35FF3572EB00CE80000E890 /* PrimaryButton.swift in Sources */,
@@ -731,6 +794,7 @@
 				A35FF3782EB0D8B70000E890 /* Environment+Resolver.swift in Sources */,
 				A35FF3D02EB229330000E890 /* ReverseSearchDTO.swift in Sources */,
 				A35FF3BC2EB224ED0000E890 /* HTTPClient.swift in Sources */,
+				A3B134C42EB5161600E9486A /* LegendDot.swift in Sources */,
 				A35FF3C62EB228610000E890 /* APIConfig.swift in Sources */,
 				A3B134902EB4C1F600E9486A /* PremiumStoreImpl.swift in Sources */,
 				A35FF3C42EB228310000E890 /* APIError.swift in Sources */,

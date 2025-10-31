@@ -1,95 +1,168 @@
-//
-//  CheaterResultView.swift
-//  CheaterBuster
-//
-//  Created by Niiaz Khasanov on 10/29/25.
-//
-
+// Presentation/Cheater/Result/CheaterResultView.swift
 
 import SwiftUI
 
+// MARK: - Screen Model (унифицируем вход)
+private struct ResultModel: Equatable {
+    let riskScore: Int
+    let redFlags: [String]
+    let recommendations: [String]
+}
+
+// MARK: - View
 struct CheaterResultView: View {
-    let record: CheaterRecord
 
+    // Inputs
+    private let model: ResultModel
+    private let onBack: () -> Void
+    private let onSelectMessage: () -> Void
+
+    // MARK: - Inits (анализ → экран)
+    init(
+        result: TaskResult,
+        onBack: @escaping () -> Void = {},
+        onSelectMessage: @escaping () -> Void = {}
+    ) {
+        self.model = .init(
+            riskScore: result.risk_score,
+            redFlags: result.red_flags,
+            recommendations: result.recommendations
+        )
+        self.onBack = onBack
+        self.onSelectMessage = onSelectMessage
+    }
+
+    // MARK: - Inits (история → экран)
+    init(
+        record: CheaterRecord,
+        onBack: @escaping () -> Void = {},
+        onSelectMessage: @escaping () -> Void = {}
+    ) {
+        self.model = .init(
+            riskScore: record.riskScore,
+            redFlags: record.redFlags,
+            recommendations: record.recommendations
+        )
+        self.onBack = onBack
+        self.onSelectMessage = onSelectMessage
+    }
+
+    // MARK: - Body
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Tokens.Spacing.x16) {
-                // Заголовок + процент
-                Text("Risk analysis")
-                    .font(Tokens.Font.title)
-                    .foregroundStyle(Tokens.Color.textPrimary)
+        VStack(spacing: 0) {
+            header
 
-                HStack(alignment: .firstTextBaseline, spacing: Tokens.Spacing.x12) {
-                    Text("\(record.riskScore)%")
-                        .font(Tokens.Font.h1)
-                        .foregroundStyle(Tokens.Color.textPrimary)
-                    Text(riskLevelText(record.riskScore))
-                        .font(Tokens.Font.body)
-                        .foregroundStyle(Tokens.Color.textSecondary)
-                }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
 
-                if let note = record.note, !note.isEmpty {
-                    Text(note)
-                        .font(Tokens.Font.captionRegular)
-                        .foregroundStyle(Tokens.Color.textSecondary)
-                }
+                    // Легенда Low / Medium / High
+                    legendBlock
+                        .padding(.horizontal, 8.scale)   // MARK: - Changed (16 → 8)
+                        .padding(.top, 16.scale)
 
-                Divider()
-
-                // Red flags
-                Text("Red flags")
-                    .font(Tokens.Font.subtitle)
-                    .foregroundStyle(Tokens.Color.textPrimary)
-
-                if record.redFlags.isEmpty {
-                    Text("No red flags found.")
-                        .font(Tokens.Font.captionRegular)
-                        .foregroundStyle(Tokens.Color.textSecondary)
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(record.redFlags, id: \.self) { flag in
-                            HStack(alignment: .top, spacing: 8) {
-                                Text("•")
-                                Text(flag)
-                            }
-                            .font(Tokens.Font.body)
+                    // Red flags
+                    if !model.redFlags.isEmpty {
+                        Text("Red flasg")
+                            .font(Tokens.Font.bodyMedium18)
+                            .tracking(-0.18)
                             .foregroundStyle(Tokens.Color.textPrimary)
-                        }
-                    }
-                }
+                            .padding(.horizontal, 8.scale)  // MARK: - Changed
+                            .padding(.top, 32.scale)
 
-                Divider()
-
-                // Recommendations
-                Text("Recommendations")
-                    .font(Tokens.Font.subtitle)
-                    .foregroundStyle(Tokens.Color.textPrimary)
-
-                if record.recommendations.isEmpty {
-                    Text("No recommendations.")
-                        .font(Tokens.Font.captionRegular)
-                        .foregroundStyle(Tokens.Color.textSecondary)
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(record.recommendations, id: \.self) { rec in
-                            HStack(alignment: .top, spacing: 8) {
-                                Text("•")
-                                Text(rec)
+                        VStack(spacing: 8.scale) {
+                            ForEach(model.redFlags, id: \.self) { txt in
+                                RedFlagCard(
+                                    title: "Suspicious languagw delected",
+                                    subtitle: "Phrase: \(txt)"
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .font(Tokens.Font.body)
-                            .foregroundStyle(Tokens.Color.textPrimary)
                         }
+                        .padding(.horizontal, 8.scale)     // MARK: - Changed
+                        .padding(.top, 16.scale)
                     }
-                }
 
-                Spacer(minLength: 0)
+                    // Recommendations
+                    if !model.recommendations.isEmpty {
+                        Text("Recommendations")
+                            .font(Tokens.Font.bodyMedium18)
+                            .tracking(-0.18)
+                            .foregroundStyle(Tokens.Color.textPrimary)
+                            .padding(.horizontal, 8.scale)  // MARK: - Changed
+                            .padding(.top, 32.scale)
+
+                        VStack(spacing: 8.scale) {
+                            ForEach(model.recommendations, id: \.self) { rec in
+                                RecommendationCard(
+                                    title: "Save evidence",
+                                    subtitle: rec
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        .padding(.horizontal, 8.scale)     // MARK: - Changed
+                        .padding(.top, 16.scale)
+                    }
+
+                    // CTA
+                    PrimaryButton("Select message") {
+                        onSelectMessage()
+                    }
+                    .padding(.horizontal, 8.scale)         // MARK: - Changed
+                    .padding(.vertical, 24.scale)
+                }
             }
-            .padding(.horizontal, Tokens.Spacing.x16)
-            .padding(.top, Tokens.Spacing.x16)
+            .background(Tokens.Color.backgroundMain.ignoresSafeArea())
         }
-        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
-        .navigationTitle("Cheater result")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarHidden(true)
+    }
+
+    // MARK: - Header
+    private var header: some View {
+        HStack(spacing: 0) {
+            BackButton(size: 44.scale, action: onBack)
+            Spacer()
+            Text("Image analysis")
+                .font(Tokens.Font.bodyMedium18) // medium 18
+                .tracking(-0.18)
+                .foregroundStyle(Tokens.Color.textPrimary)
+            Spacer()
+            // симметрия
+            Color.clear.frame(width: 44.scale, height: 44.scale)
+        }
+        .padding(.horizontal, 16.scale) // оставил как было
+        .padding(.top, 10.scale)
+        .padding(.bottom, 8.scale)
+        .background(Tokens.Color.backgroundMain)
+    }
+
+    // MARK: - Legend
+    private var legendBlock: some View {
+        VStack(spacing: 12.scale) {
+            Text(riskLevelText(model.riskScore))
+                .font(Tokens.Font.body) // 20 Regular
+                .tracking(-0.20)
+                .foregroundStyle(Tokens.Color.textSecondary)
+
+            HStack(spacing: 24.scale) {
+                legendDot(.green, text: "Low")
+                legendDot(.yellow, text: "Medium")
+                legendDot(.red, text: "High")
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func legendDot(_ color: Color, text: String) -> some View {
+        HStack(spacing: 8.scale) {
+            Circle()
+                .fill(color)
+                .frame(width: 20.scale, height: 20.scale)
+            Text(text)
+                .font(Tokens.Font.captionRegular) // 15 Regular
+                .tracking(-0.15)
+                .foregroundStyle(Tokens.Color.textSecondary)
+        }
     }
 
     private func riskLevelText(_ score: Int) -> String {

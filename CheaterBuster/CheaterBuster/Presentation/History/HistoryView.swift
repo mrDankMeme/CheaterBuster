@@ -39,7 +39,11 @@ struct HistoryView: View {
                     SearchResultsView(results: vm.rerunResults, mode: .face)
                 }
                 .navigationDestination(item: $vm.selectedCheater) { rec in
-                    CheaterResultView(record: rec)
+                    CheaterResultView(
+                        result: rec.asTaskResult,
+                        onBack: { vm.selectedCheater = nil },
+                        onSelectMessage: {} // из истории выбирать новое не нужно
+                    )
                 }
         }
         // Paywall (как и было добавлено ранее)
@@ -311,5 +315,16 @@ private struct SegmentCapsule: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Added: адаптер CheaterRecord -> TaskResult
+private extension CheaterRecord {
+    var asTaskResult: TaskResult {
+        .init(
+            risk_score: self.riskScore,
+            red_flags: self.redFlags,
+            recommendations: self.recommendations
+        )
     }
 }
