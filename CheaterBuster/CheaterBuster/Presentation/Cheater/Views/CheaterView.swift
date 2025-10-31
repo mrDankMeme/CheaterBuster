@@ -15,14 +15,26 @@ struct CheaterView: View {
     @EnvironmentObject private var router: AppRouter
     @Environment(\.resolver) private var resolver
 
+    // PhotosPicker
     @State private var photoItem: PhotosPickerItem?
     @State private var showPhotoPicker = false
+
+    // Document picker
     @State private var showFilePicker = false
+
+    // Optional text conversation
     @State private var conversationText: String = ""
+
+    // Alert after saving
     @State private var showSavedAlert = false
+
+    // Paywall
     @State private var showPaywall = false
+
+    // Bottom sheet
     @State private var showSourceSheet = false
 
+    // Сохраняем последнюю картинку для превью/загрузки
     @State private var lastPreviewImage: UIImage? = nil
 
     private enum CheaterRoute: Hashable {
@@ -30,6 +42,7 @@ struct CheaterView: View {
         case uploading
         case result
     }
+
     @State private var path: [CheaterRoute] = []
     @State private var routedResult: TaskResult? = nil
 
@@ -46,6 +59,7 @@ struct CheaterView: View {
             .navigationTitle(navigationTitle)
             .toolbar(.hidden, for: .navigationBar)
 
+            // --- Pickers
             .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
             .fileImporter(
                 isPresented: $showFilePicker,
@@ -68,6 +82,7 @@ struct CheaterView: View {
                 }
             }
 
+            // --- Фото -> UIImage
             .onChange(of: photoItem) { item in
                 guard let item else { return }
                 Task {
@@ -85,6 +100,7 @@ struct CheaterView: View {
                 }
             }
 
+            // --- Saved alert
             .onChange(of: vm.didSave) { _, saved in
                 guard saved else { return }
                 showSavedAlert = true
@@ -94,11 +110,13 @@ struct CheaterView: View {
                 Button("OK", role: .cancel) { }
             }
 
+            // --- Paywall
             .fullScreenCover(isPresented: $showPaywall) {
                 let paywallVM = resolver.resolve(PaywallViewModel.self)!
                 PaywallView(vm: paywallVM).presentationDetents([.large])
             }
 
+            // --- Bottom sheet
             .overlay(alignment: .bottom) {
                 if showSourceSheet {
                     SourcePickerOverlay(
@@ -109,26 +127,26 @@ struct CheaterView: View {
                 }
             }
 
-            // Слушаем состояния VM и двигаем роут только на "uploading".
+            // --- Навигация по состояниям VM
             .onChange(of: vm.state) { _, newState in
                 switch newState {
                 case .uploading:
                     if path.last != .uploading { path.append(.uploading) }
                 case .result(let r):
-                    // MARK: - Changed: сохраняем результат, НО НЕ ПУШИМ .result
-                    routedResult = r
+                    routedResult = r // результат открываем ТОЛЬКО по кнопке
                 default:
                     break
                 }
             }
 
-            // Возврат на корень — сбрасываем VM в .idle
+            // --- Возврат на корень => idle
             .onChange(of: path) { _, newPath in
                 if newPath.isEmpty, vm.state != .idle {
                     vm.goBackToIdle()
                 }
             }
 
+            // --- Экран назначения
             .navigationDestination(for: CheaterRoute.self) { route in
                 switch route {
                 case .imagePreview:
@@ -142,7 +160,6 @@ struct CheaterView: View {
                     .navigationBarBackButtonHidden(true)
 
                 case .uploading:
-                    // Если уже получен результат, показываем 100% и активную кнопку
                     switch vm.state {
                     case .uploading(let p):
                         uploadingView(progress: p)
@@ -170,9 +187,11 @@ struct CheaterView: View {
                 }
             }
         }
+        // MARK: - Added: кастомный edge-swipe pop работает ВСЕГДА
+        .edgeSwipeToPop(isEnabled: !path.isEmpty) { _ = path.popLast() }
     }
 
-    // На корне NavigationStack показываем только idle
+    // Корневой экран NavigationStack: показываем только idle
     @ViewBuilder
     private var content: some View {
         switch vm.state {
@@ -215,8 +234,9 @@ struct CheaterView: View {
                 PrimaryButton("Analyse") {
                     let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
                     guard isPremium else { showPaywall = true; return }
+                    if let img = lastPreviewImage { vm.showImage(img) } // гарантируем вход
                     vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
-                    // vm.state -> .uploading => пушим .uploading (см. onChange выше)
+                    // Дальше vm.state -> .uploading и мы пушим .uploading через onChange
                 }
             }
             .padding(.horizontal, 16.scale)
@@ -247,7 +267,6 @@ struct CheaterView: View {
                 .padding(.horizontal, 8.scale)
             }
             VStack(spacing: 12.scale) {
-                // По нажатию сами пушим результат (рекорды уже в routedResult)
                 PrimaryButton("View analysis report") {
                     if path.last != .result {
                         path.append(.result)
@@ -267,7 +286,7 @@ struct CheaterView: View {
         HStack {
             BackButton(size: 44.scale) {
                 if !path.isEmpty {
-                    _ = path.popLast() // возврат по стеку; на корень — vm.goBackToIdle() в onChange(path)
+                    _ = path.popLast() // корретный pop; на корень — reset через onChange(path)
                 } else {
                     vm.goBackToIdle()
                 }

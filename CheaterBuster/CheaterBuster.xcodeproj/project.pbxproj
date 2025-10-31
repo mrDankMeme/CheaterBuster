@@ -94,6 +94,8 @@
 		A3B134C42EB5161600E9486A /* LegendDot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134C32EB5161600E9486A /* LegendDot.swift */; };
 		A3B134C62EB5162200E9486A /* RedFlagCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134C52EB5162200E9486A /* RedFlagCard.swift */; };
 		A3B134C82EB5162900E9486A /* RecommendationCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134C72EB5162900E9486A /* RecommendationCard.swift */; };
+		A3B134D92EB577A700E9486A /* InteractivePopConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134D82EB577A700E9486A /* InteractivePopConfigurator.swift */; };
+		A3B134DB2EB57AA400E9486A /* EdgeSwipeCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134DA2EB57AA400E9486A /* EdgeSwipeCapture.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -185,6 +187,8 @@
 		A3B134C32EB5161600E9486A /* LegendDot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegendDot.swift; sourceTree = "<group>"; };
 		A3B134C52EB5162200E9486A /* RedFlagCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedFlagCard.swift; sourceTree = "<group>"; };
 		A3B134C72EB5162900E9486A /* RecommendationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendationCard.swift; sourceTree = "<group>"; };
+		A3B134D82EB577A700E9486A /* InteractivePopConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractivePopConfigurator.swift; sourceTree = "<group>"; };
+		A3B134DA2EB57AA400E9486A /* EdgeSwipeCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeSwipeCapture.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -429,6 +433,7 @@
 		A35FF3BD2EB225490000E890 /* Infrastucture */ = {
 			isa = PBXGroup;
 			children = (
+				A3B134D42EB5779000E9486A /* UIKit */,
 				A3B134982EB4CF2F00E9486A /* Permissions */,
 				A35FF3E72EB232A50000E890 /* Security */,
 				A35FF3BE2EB225640000E890 /* Networking */,
@@ -637,6 +642,23 @@
 			path = Result;
 			sourceTree = "<group>";
 		};
+		A3B134D42EB5779000E9486A /* UIKit */ = {
+			isa = PBXGroup;
+			children = (
+				A3B134D52EB5779600E9486A /* Navigation */,
+			);
+			path = UIKit;
+			sourceTree = "<group>";
+		};
+		A3B134D52EB5779600E9486A /* Navigation */ = {
+			isa = PBXGroup;
+			children = (
+				A3B134DA2EB57AA400E9486A /* EdgeSwipeCapture.swift */,
+				A3B134D82EB577A700E9486A /* InteractivePopConfigurator.swift */,
+			);
+			path = Navigation;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -727,10 +749,12 @@
 				A35FF3F32EB270B50000E890 /* AppRouter.swift in Sources */,
 				A35FF3E92EB232AC0000E890 /* InMemoryTokenStorage.swift in Sources */,
 				A35FF3502EB005DD0000E890 /* CheaterBusterApp.swift in Sources */,
+				A3B134DB2EB57AA400E9486A /* EdgeSwipeCapture.swift in Sources */,
 				A3B134942EB4C24800E9486A /* SubscriptionServiceStub.swift in Sources */,
 				A35FF3712EB0D3330000E890 /* SettingsView.swift in Sources */,
 				A35FF3882EB0ED3F0000E890 /* CheaterAnalyzerServiceImpl.swift in Sources */,
 				A35FF3842EB0EA100000E890 /* SettingsStore.swift in Sources */,
+				A3B134D92EB577A700E9486A /* InteractivePopConfigurator.swift in Sources */,
 				A3B134B02EB505CD00E9486A /* CheaterViewModel+InternalNavigation.swift in Sources */,
 				A35FF3E22EB231D30000E890 /* AuthRepositoryImpl.swift in Sources */,
 				A35FF3F12EB251950000E890 /* CheaterResultView.swift in Sources */,
