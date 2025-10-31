@@ -5,6 +5,7 @@
 //  Created by Niiaz Khasanov on 10/27/25.
 //
 
+
 import SwiftUI
 
 public struct PrimaryButton: View {
@@ -35,17 +36,19 @@ public struct PrimaryButton: View {
                     ProgressView().tint(.white)
                 } else {
                     Text(title)
-                        .font(Tokens.Font.subtitle)
+                        // MARK: - Changed: 16pt, Semibold, letter-spacing -1%
+                        .font(.system(size: 16, weight: .semibold))
+                        .tracking(-0.16)
                         .foregroundColor(.white)
                         .lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, size == .large ? 16 : 12)
-            // iOS-style corner smoothing (.continuous)
+            // MARK: - Changed: размеры через .scale
+            .padding(.vertical, size == .large ? 16.scale : 12.scale)
             .background(
                 (isDisabled ? Tokens.Color.accentPressed : Tokens.Color.accent),
-                in: RoundedRectangle(cornerRadius: Tokens.Radius.pill, style: .continuous)
+                in: RoundedRectangle(cornerRadius: Tokens.Radius.pill.scale, style: .continuous) // MARK: - Changed: .scale
             )
         }
         .buttonStyle(.plain)
