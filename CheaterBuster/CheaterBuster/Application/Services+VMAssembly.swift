@@ -63,11 +63,16 @@ final class ServicesAssembly: Assembly {
         container.register(SettingsStore.self) { _ in SettingsStoreImpl() }
             .inObjectScope(.container)
 
-        // MARK: Tokens store (на будущее)
-        container.register(TokensStore.self) { _ in TokensStoreImpl() }
+        // MARK: - Added: Premium & Subscriptions
+        container.register(PremiumStore.self) { _ in PremiumStoreImpl() }
             .inObjectScope(.container)
 
-        // MARK: Domain / Search Repository
+        container.register(SubscriptionService.self) { r in
+            SubscriptionServiceStub(store: r.resolve(PremiumStore.self)!)
+        }
+        .inObjectScope(.container)
+
+        // MARK: Domain / Search Repository (НОВОЕ ранее)
         container.register(SearchRepository.self) { r in
             SearchRepositoryImpl(api: r.resolve(CheaterAPI.self)!)
         }
@@ -84,22 +89,6 @@ final class ServicesAssembly: Assembly {
 
         container.register(CheaterAnalyzerService.self) { _ in CheaterAnalyzerServiceImpl() }
             .inObjectScope(.container)
-
-        container.register(UserService.self) { r in
-            UserServiceImpl(
-                cfg: r.resolve(APIConfig.self)!,
-                http: r.resolve(HTTPClient.self)!,
-                tokensStorage: r.resolve(TokenStorage.self)!,
-                tokensStore: r.resolve(TokensStore.self)!
-            )
-        }
-        .inObjectScope(.container)
-
-        // MARK: - Added: Subscription (заглушка под Apphud)
-        container.register(SubscriptionService.self) { _ in
-            SubscriptionServiceImpl()
-        }
-        .inObjectScope(.container)
 
         // MARK: ViewModels
         container.register(SearchViewModel.self) { r in
@@ -128,7 +117,12 @@ final class ServicesAssembly: Assembly {
             )
         }
 
-        // MARK: - Added: Paywall VM
+        // Added: Settings VM
+        container.register(SettingsViewModel.self) { r in
+            SettingsViewModel(store: r.resolve(SettingsStore.self)!)
+        }
+
+        // Added: Paywall VM
         container.register(PaywallViewModel.self) { r in
             PaywallViewModel(subscription: r.resolve(SubscriptionService.self)!)
         }

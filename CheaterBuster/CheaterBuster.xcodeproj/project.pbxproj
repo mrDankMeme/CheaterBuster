@@ -72,10 +72,13 @@
 		A3B1347C2EB4B23C00E9486A /* TokensStoreImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B1347B2EB4B23C00E9486A /* TokensStoreImpl.swift */; };
 		A3B1347F2EB4B25900E9486A /* UserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B1347E2EB4B25900E9486A /* UserService.swift */; };
 		A3B134812EB4B26900E9486A /* UserServiceImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134802EB4B26900E9486A /* UserServiceImpl.swift */; };
-		A3B134842EB4BD8900E9486A /* SubscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134832EB4BD8900E9486A /* SubscriptionService.swift */; };
 		A3B134872EB4BD9E00E9486A /* SubscriptionServiceImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134862EB4BD9E00E9486A /* SubscriptionServiceImpl.swift */; };
 		A3B1348A2EB4BEAE00E9486A /* PaywallViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134892EB4BEAE00E9486A /* PaywallViewModel.swift */; };
 		A3B1348C2EB4BEB700E9486A /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B1348B2EB4BEB700E9486A /* PaywallView.swift */; };
+		A3B1348E2EB4C1E400E9486A /* PremiumStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B1348D2EB4C1E400E9486A /* PremiumStore.swift */; };
+		A3B134902EB4C1F600E9486A /* PremiumStoreImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B1348F2EB4C1F600E9486A /* PremiumStoreImpl.swift */; };
+		A3B134922EB4C20C00E9486A /* SubscriptionPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134912EB4C20C00E9486A /* SubscriptionPlan.swift */; };
+		A3B134942EB4C24800E9486A /* SubscriptionServiceStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134932EB4C24800E9486A /* SubscriptionServiceStub.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -144,10 +147,13 @@
 		A3B1347B2EB4B23C00E9486A /* TokensStoreImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokensStoreImpl.swift; sourceTree = "<group>"; };
 		A3B1347E2EB4B25900E9486A /* UserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserService.swift; sourceTree = "<group>"; };
 		A3B134802EB4B26900E9486A /* UserServiceImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserServiceImpl.swift; sourceTree = "<group>"; };
-		A3B134832EB4BD8900E9486A /* SubscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionService.swift; sourceTree = "<group>"; };
 		A3B134862EB4BD9E00E9486A /* SubscriptionServiceImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionServiceImpl.swift; sourceTree = "<group>"; };
 		A3B134892EB4BEAE00E9486A /* PaywallViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallViewModel.swift; sourceTree = "<group>"; };
 		A3B1348B2EB4BEB700E9486A /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallView.swift; sourceTree = "<group>"; };
+		A3B1348D2EB4C1E400E9486A /* PremiumStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumStore.swift; sourceTree = "<group>"; };
+		A3B1348F2EB4C1F600E9486A /* PremiumStoreImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumStoreImpl.swift; sourceTree = "<group>"; };
+		A3B134912EB4C20C00E9486A /* SubscriptionPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionPlan.swift; sourceTree = "<group>"; };
+		A3B134932EB4C24800E9486A /* SubscriptionServiceStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionServiceStub.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -238,9 +244,8 @@
 		A35FF35C2EB0CE090000E890 /* Domain */ = {
 			isa = PBXGroup;
 			children = (
-				A3B134822EB4BD8000E9486A /* Subscriptions */,
 				A3B1347D2EB4B25300E9486A /* Services */,
-				A3B134772EB4B21900E9486A /* Store */,
+				A3B134772EB4B21900E9486A /* Stores */,
 				A35FF3632EB0CE570000E890 /* Entities */,
 				A35FF3642EB0CE5E0000E890 /* UseCases */,
 			);
@@ -350,6 +355,7 @@
 		A35FF3662EB0CE710000E890 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				A3B134932EB4C24800E9486A /* SubscriptionServiceStub.swift */,
 				A3B134802EB4B26900E9486A /* UserServiceImpl.swift */,
 				A35FF3FB2EB27EDD0000E890 /* SearchRepositoryImpl.swift */,
 				A35FF3ED2EB233080000E890 /* Storage */,
@@ -451,17 +457,19 @@
 			path = Storage;
 			sourceTree = "<group>";
 		};
-		A3B134772EB4B21900E9486A /* Store */ = {
+		A3B134772EB4B21900E9486A /* Stores */ = {
 			isa = PBXGroup;
 			children = (
+				A3B1348D2EB4C1E400E9486A /* PremiumStore.swift */,
 				A3B134782EB4B21F00E9486A /* TokensStore.swift */,
 			);
-			path = Store;
+			path = Stores;
 			sourceTree = "<group>";
 		};
 		A3B1347A2EB4B23600E9486A /* Stores */ = {
 			isa = PBXGroup;
 			children = (
+				A3B1348F2EB4C1F600E9486A /* PremiumStoreImpl.swift */,
 				A3B1347B2EB4B23C00E9486A /* TokensStoreImpl.swift */,
 			);
 			path = Stores;
@@ -470,18 +478,11 @@
 		A3B1347D2EB4B25300E9486A /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				A3B134912EB4C20C00E9486A /* SubscriptionPlan.swift */,
 				A35FF3F92EB27E9F0000E890 /* SearchRepository.swift */,
 				A3B1347E2EB4B25900E9486A /* UserService.swift */,
 			);
 			path = Services;
-			sourceTree = "<group>";
-		};
-		A3B134822EB4BD8000E9486A /* Subscriptions */ = {
-			isa = PBXGroup;
-			children = (
-				A3B134832EB4BD8900E9486A /* SubscriptionService.swift */,
-			);
-			path = Subscriptions;
 			sourceTree = "<group>";
 		};
 		A3B134852EB4BD9700E9486A /* Subscriptions */ = {
@@ -582,13 +583,14 @@
 				A35FF38C2EB0F1090000E890 /* SettingsStoreImpl.swift in Sources */,
 				A35FF3EF2EB24A090000E890 /* TaskCreateResponse.swift in Sources */,
 				A35FF3FC2EB27EDD0000E890 /* SearchRepositoryImpl.swift in Sources */,
+				A3B134922EB4C20C00E9486A /* SubscriptionPlan.swift in Sources */,
 				A3B1348A2EB4BEAE00E9486A /* PaywallViewModel.swift in Sources */,
 				A35FF3F32EB270B50000E890 /* AppRouter.swift in Sources */,
 				A35FF3E92EB232AC0000E890 /* InMemoryTokenStorage.swift in Sources */,
 				A35FF3502EB005DD0000E890 /* CheaterBusterApp.swift in Sources */,
+				A3B134942EB4C24800E9486A /* SubscriptionServiceStub.swift in Sources */,
 				A35FF3712EB0D3330000E890 /* SettingsView.swift in Sources */,
 				A35FF3882EB0ED3F0000E890 /* CheaterAnalyzerServiceImpl.swift in Sources */,
-				A3B134842EB4BD8900E9486A /* SubscriptionService.swift in Sources */,
 				A35FF3842EB0EA100000E890 /* SettingsStore.swift in Sources */,
 				A35FF3E22EB231D30000E890 /* AuthRepositoryImpl.swift in Sources */,
 				A35FF3F12EB251950000E890 /* CheaterResultView.swift in Sources */,
@@ -606,6 +608,7 @@
 				A35FF3902EB0F42E0000E890 /* CheaterViewModel.swift in Sources */,
 				A35FF3922EB0FC040000E890 /* HistoryViewModel.swift in Sources */,
 				A35FF3AD2EB12D790000E890 /* CheaterRecord.swift in Sources */,
+				A3B1348E2EB4C1E400E9486A /* PremiumStore.swift in Sources */,
 				A35FF3732EB0D3460000E890 /* SettingsViewModel.swift in Sources */,
 				A35FF3A92EB11AC50000E890 /* LoadingView.swift in Sources */,
 				A35FF3982EB1047A0000E890 /* RootTabView.swift in Sources */,
@@ -643,6 +646,7 @@
 				A35FF3D02EB229330000E890 /* ReverseSearchDTO.swift in Sources */,
 				A35FF3BC2EB224ED0000E890 /* HTTPClient.swift in Sources */,
 				A35FF3C62EB228610000E890 /* APIConfig.swift in Sources */,
+				A3B134902EB4C1F600E9486A /* PremiumStoreImpl.swift in Sources */,
 				A35FF3C42EB228310000E890 /* APIError.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

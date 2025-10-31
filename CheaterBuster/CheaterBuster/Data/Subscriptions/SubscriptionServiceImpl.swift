@@ -6,13 +6,6 @@
 //
 
 
-//
-//  SubscriptionServiceImpl.swift
-//  CheaterBuster
-//
-//  Created by Niiaz Khasanov on 10/31/25.
-//
-
 import Foundation
 
 /// Реализация заглушки подписки для v1.
@@ -39,17 +32,18 @@ final class SubscriptionServiceImpl: SubscriptionService {
     }
 
     @discardableResult
-    func purchase() async throws -> Bool {
-        // V1: помечаем локально как куплено.
-        isSubscribed = true
-        defaults.set(true, forKey: key)
-        return true
-    }
+    func purchase(plan: SubscriptionPlan) async throws {
+           // V1: план игнорируем, просто считаем покупку успешной.
+           // (Позже здесь будет вызов Apphud/StoreKit2.)
+           isSubscribed = true
+           defaults.set(true, forKey: key)
+       }
 
     @discardableResult
-    func restore() async throws -> Bool {
-        // V1: читаем локально. Позже — Apphud.restore().
-        isSubscribed = defaults.bool(forKey: key)
-        return isSubscribed
-    }
+    func restore() async throws {
+           // V1: читаем локальный флаг. Позже — Apphud.restore().
+           isSubscribed = defaults.bool(forKey: key)
+       }
+    
+    
 }
