@@ -8,13 +8,15 @@
 import SwiftUI
 
 struct SettingsScreen: View {
-    // MARK: - Added
-    @ObservedObject var vm: SettingsViewModel
+    @StateObject private var vm: SettingsViewModel
+
+    init(vm: SettingsViewModel) {
+        _vm = StateObject(wrappedValue: vm)
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                // MARK: - Changed: биндим к VM вместо локального стейта
                 Toggle("Save history", isOn: $vm.isHistoryEnabled)
             }
             .navigationTitle("Settings")

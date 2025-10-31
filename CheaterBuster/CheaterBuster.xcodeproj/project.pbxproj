@@ -14,7 +14,7 @@
 		A35FF3572EB00CE80000E890 /* PrimaryButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3562EB00CE80000E890 /* PrimaryButton.swift */; };
 		A35FF3592EB00CF10000E890 /* SearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3582EB00CF10000E890 /* SearchField.swift */; };
 		A35FF36D2EB0CF930000E890 /* Swinject in Frameworks */ = {isa = PBXBuildFile; productRef = A35FF36C2EB0CF930000E890 /* Swinject */; };
-		A35FF3712EB0D3330000E890 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3702EB0D32F0000E890 /* SettingsScreen.swift */; };
+		A35FF3712EB0D3330000E890 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3702EB0D32F0000E890 /* SettingsView.swift */; };
 		A35FF3732EB0D3460000E890 /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3722EB0D3360000E890 /* SettingsViewModel.swift */; };
 		A35FF3752EB0D8350000E890 /* AppAssembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3742EB0D8300000E890 /* AppAssembler.swift */; };
 		A35FF3782EB0D8B70000E890 /* Environment+Resolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3772EB0D8B50000E890 /* Environment+Resolver.swift */; };
@@ -68,6 +68,14 @@
 		A35FF3F72EB275CA0000E890 /* Notification+Names.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3F62EB275C10000E890 /* Notification+Names.swift */; };
 		A35FF3FA2EB27E9F0000E890 /* SearchRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3F92EB27E9F0000E890 /* SearchRepository.swift */; };
 		A35FF3FC2EB27EDD0000E890 /* SearchRepositoryImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35FF3FB2EB27EDD0000E890 /* SearchRepositoryImpl.swift */; };
+		A3B134792EB4B21F00E9486A /* TokensStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134782EB4B21F00E9486A /* TokensStore.swift */; };
+		A3B1347C2EB4B23C00E9486A /* TokensStoreImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B1347B2EB4B23C00E9486A /* TokensStoreImpl.swift */; };
+		A3B1347F2EB4B25900E9486A /* UserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B1347E2EB4B25900E9486A /* UserService.swift */; };
+		A3B134812EB4B26900E9486A /* UserServiceImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134802EB4B26900E9486A /* UserServiceImpl.swift */; };
+		A3B134842EB4BD8900E9486A /* SubscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134832EB4BD8900E9486A /* SubscriptionService.swift */; };
+		A3B134872EB4BD9E00E9486A /* SubscriptionServiceImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134862EB4BD9E00E9486A /* SubscriptionServiceImpl.swift */; };
+		A3B1348A2EB4BEAE00E9486A /* PaywallViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134892EB4BEAE00E9486A /* PaywallViewModel.swift */; };
+		A3B1348C2EB4BEB700E9486A /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B1348B2EB4BEB700E9486A /* PaywallView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -78,7 +86,7 @@
 		A35FF3532EB005ED0000E890 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		A35FF3562EB00CE80000E890 /* PrimaryButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimaryButton.swift; sourceTree = "<group>"; };
 		A35FF3582EB00CF10000E890 /* SearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchField.swift; sourceTree = "<group>"; };
-		A35FF3702EB0D32F0000E890 /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
+		A35FF3702EB0D32F0000E890 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A35FF3722EB0D3360000E890 /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
 		A35FF3742EB0D8300000E890 /* AppAssembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAssembler.swift; sourceTree = "<group>"; };
 		A35FF3772EB0D8B50000E890 /* Environment+Resolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Environment+Resolver.swift"; sourceTree = "<group>"; };
@@ -132,6 +140,14 @@
 		A35FF3F62EB275C10000E890 /* Notification+Names.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Notification+Names.swift"; sourceTree = "<group>"; };
 		A35FF3F92EB27E9F0000E890 /* SearchRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchRepository.swift; sourceTree = "<group>"; };
 		A35FF3FB2EB27EDD0000E890 /* SearchRepositoryImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchRepositoryImpl.swift; sourceTree = "<group>"; };
+		A3B134782EB4B21F00E9486A /* TokensStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokensStore.swift; sourceTree = "<group>"; };
+		A3B1347B2EB4B23C00E9486A /* TokensStoreImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokensStoreImpl.swift; sourceTree = "<group>"; };
+		A3B1347E2EB4B25900E9486A /* UserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserService.swift; sourceTree = "<group>"; };
+		A3B134802EB4B26900E9486A /* UserServiceImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserServiceImpl.swift; sourceTree = "<group>"; };
+		A3B134832EB4BD8900E9486A /* SubscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionService.swift; sourceTree = "<group>"; };
+		A3B134862EB4BD9E00E9486A /* SubscriptionServiceImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionServiceImpl.swift; sourceTree = "<group>"; };
+		A3B134892EB4BEAE00E9486A /* PaywallViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallViewModel.swift; sourceTree = "<group>"; };
+		A3B1348B2EB4BEB700E9486A /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -222,7 +238,9 @@
 		A35FF35C2EB0CE090000E890 /* Domain */ = {
 			isa = PBXGroup;
 			children = (
-				A35FF3F92EB27E9F0000E890 /* SearchRepository.swift */,
+				A3B134822EB4BD8000E9486A /* Subscriptions */,
+				A3B1347D2EB4B25300E9486A /* Services */,
+				A3B134772EB4B21900E9486A /* Store */,
 				A35FF3632EB0CE570000E890 /* Entities */,
 				A35FF3642EB0CE5E0000E890 /* UseCases */,
 			);
@@ -232,6 +250,8 @@
 		A35FF35D2EB0CE130000E890 /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				A3B134852EB4BD9700E9486A /* Subscriptions */,
+				A3B1347A2EB4B23600E9486A /* Stores */,
 				A35FF3662EB0CE710000E890 /* Services */,
 			);
 			path = Data;
@@ -240,6 +260,7 @@
 		A35FF35E2EB0CE200000E890 /* Presentation */ = {
 			isa = PBXGroup;
 			children = (
+				A3B134882EB4BEA800E9486A /* Paywall */,
 				A35FF3A72EB11ABE0000E890 /* Common */,
 				A35FF3622EB0CE450000E890 /* Settings */,
 				A35FF3612EB0CE3E0000E890 /* History */,
@@ -284,7 +305,7 @@
 			isa = PBXGroup;
 			children = (
 				A35FF3722EB0D3360000E890 /* SettingsViewModel.swift */,
-				A35FF3702EB0D32F0000E890 /* SettingsScreen.swift */,
+				A35FF3702EB0D32F0000E890 /* SettingsView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -329,6 +350,7 @@
 		A35FF3662EB0CE710000E890 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				A3B134802EB4B26900E9486A /* UserServiceImpl.swift */,
 				A35FF3FB2EB27EDD0000E890 /* SearchRepositoryImpl.swift */,
 				A35FF3ED2EB233080000E890 /* Storage */,
 				A35FF3EC2EB232F70000E890 /* Tasks */,
@@ -429,6 +451,56 @@
 			path = Storage;
 			sourceTree = "<group>";
 		};
+		A3B134772EB4B21900E9486A /* Store */ = {
+			isa = PBXGroup;
+			children = (
+				A3B134782EB4B21F00E9486A /* TokensStore.swift */,
+			);
+			path = Store;
+			sourceTree = "<group>";
+		};
+		A3B1347A2EB4B23600E9486A /* Stores */ = {
+			isa = PBXGroup;
+			children = (
+				A3B1347B2EB4B23C00E9486A /* TokensStoreImpl.swift */,
+			);
+			path = Stores;
+			sourceTree = "<group>";
+		};
+		A3B1347D2EB4B25300E9486A /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A35FF3F92EB27E9F0000E890 /* SearchRepository.swift */,
+				A3B1347E2EB4B25900E9486A /* UserService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A3B134822EB4BD8000E9486A /* Subscriptions */ = {
+			isa = PBXGroup;
+			children = (
+				A3B134832EB4BD8900E9486A /* SubscriptionService.swift */,
+			);
+			path = Subscriptions;
+			sourceTree = "<group>";
+		};
+		A3B134852EB4BD9700E9486A /* Subscriptions */ = {
+			isa = PBXGroup;
+			children = (
+				A3B134862EB4BD9E00E9486A /* SubscriptionServiceImpl.swift */,
+			);
+			path = Subscriptions;
+			sourceTree = "<group>";
+		};
+		A3B134882EB4BEA800E9486A /* Paywall */ = {
+			isa = PBXGroup;
+			children = (
+				A3B1348B2EB4BEB700E9486A /* PaywallView.swift */,
+				A3B134892EB4BEAE00E9486A /* PaywallViewModel.swift */,
+			);
+			path = Paywall;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -510,11 +582,13 @@
 				A35FF38C2EB0F1090000E890 /* SettingsStoreImpl.swift in Sources */,
 				A35FF3EF2EB24A090000E890 /* TaskCreateResponse.swift in Sources */,
 				A35FF3FC2EB27EDD0000E890 /* SearchRepositoryImpl.swift in Sources */,
+				A3B1348A2EB4BEAE00E9486A /* PaywallViewModel.swift in Sources */,
 				A35FF3F32EB270B50000E890 /* AppRouter.swift in Sources */,
 				A35FF3E92EB232AC0000E890 /* InMemoryTokenStorage.swift in Sources */,
 				A35FF3502EB005DD0000E890 /* CheaterBusterApp.swift in Sources */,
-				A35FF3712EB0D3330000E890 /* SettingsScreen.swift in Sources */,
+				A35FF3712EB0D3330000E890 /* SettingsView.swift in Sources */,
 				A35FF3882EB0ED3F0000E890 /* CheaterAnalyzerServiceImpl.swift in Sources */,
+				A3B134842EB4BD8900E9486A /* SubscriptionService.swift in Sources */,
 				A35FF3842EB0EA100000E890 /* SettingsStore.swift in Sources */,
 				A35FF3E22EB231D30000E890 /* AuthRepositoryImpl.swift in Sources */,
 				A35FF3F12EB251950000E890 /* CheaterResultView.swift in Sources */,
@@ -528,6 +602,7 @@
 				A35FF3B12EB12DBE0000E890 /* CheaterStore.swift in Sources */,
 				A35FF3E42EB232000000E890 /* CheaterAPIImpl.swift in Sources */,
 				A35FF3D82EB22A050000E890 /* TaskPoller.swift in Sources */,
+				A3B1348C2EB4BEB700E9486A /* PaywallView.swift in Sources */,
 				A35FF3902EB0F42E0000E890 /* CheaterViewModel.swift in Sources */,
 				A35FF3922EB0FC040000E890 /* HistoryViewModel.swift in Sources */,
 				A35FF3AD2EB12D790000E890 /* CheaterRecord.swift in Sources */,
@@ -538,15 +613,19 @@
 				A35FF3752EB0D8350000E890 /* AppAssembler.swift in Sources */,
 				A35FF3E62EB2324F0000E890 /* TaskPollerImpl.swift in Sources */,
 				A35FF3822EB0E9350000E890 /* HistoryStore.swift in Sources */,
+				A3B134792EB4B21F00E9486A /* TokensStore.swift in Sources */,
 				A35FF3C92EB228950000E890 /* TokenStorage.swift in Sources */,
 				A35FF3542EB005F00000E890 /* DesignTokens.swift in Sources */,
 				A35FF38E2EB0F1F30000E890 /* SearchViewModel.swift in Sources */,
 				A35FF3FA2EB27E9F0000E890 /* SearchRepository.swift in Sources */,
+				A3B1347C2EB4B23C00E9486A /* TokensStoreImpl.swift in Sources */,
 				A35FF39A2EB104A30000E890 /* SearchScreen.swift in Sources */,
 				A35FF3802EB0E8DE0000E890 /* CheaterAnalyzerService.swift in Sources */,
+				A3B134872EB4BD9E00E9486A /* SubscriptionServiceImpl.swift in Sources */,
 				A35FF3572EB00CE80000E890 /* PrimaryButton.swift in Sources */,
 				A35FF39E2EB107420000E890 /* HistoryView.swift in Sources */,
 				A35FF39C2EB106150000E890 /* CheaterView.swift in Sources */,
+				A3B1347F2EB4B25900E9486A /* UserService.swift in Sources */,
 				A35FF3CE2EB2291E0000E890 /* TaskDTO.swift in Sources */,
 				A35FF3D22EB229680000E890 /* AuthRepository.swift in Sources */,
 				A35FF3512EB005DD0000E890 /* DemoView.swift in Sources */,
@@ -555,6 +634,7 @@
 				A35FF37E2EB0E80C0000E890 /* SearchService.swift in Sources */,
 				A35FF3CC2EB2290A0000E890 /* UserReadDTO.swift in Sources */,
 				A35FF3D42EB229930000E890 /* CheaterAPI.swift in Sources */,
+				A3B134812EB4B26900E9486A /* UserServiceImpl.swift in Sources */,
 				A35FF38A2EB0EE380000E890 /* HistoryStoreImpl.swift in Sources */,
 				A35FF3B32EB12F980000E890 /* DevSeed.swift in Sources */,
 				A35FF3862EB0EA600000E890 /* SearchServiceImpl.swift in Sources */,
