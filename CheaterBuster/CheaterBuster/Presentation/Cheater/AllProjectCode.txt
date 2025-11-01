@@ -505,34 +505,36 @@ struct SourcePickerOverlay: View {
     @State private var isDismissing = false
     @State private var endDragY: CGFloat = 0
 
-    // Все размеры применяются с .scale
+    // Константы (все применяются с .scale)
     private let containerCorner: CGFloat = 32
     private let rowCorner: CGFloat = 22
     private let rowHeight: CGFloat = 52
     private let hPadding: CGFloat = 16
     private let gapRows: CGFloat = 12
-    private let titleTop: CGFloat = 12      // заголовок ближе к верху
+    private let titleTop: CGFloat = 16
     private let titleToFirstRow: CGFloat = 16
     private let iconSize: CGFloat = 24
+
+    private let handleWidth: CGFloat = 40
+    private let handleHeight: CGFloat = 4
+    private let sheetHeight: CGFloat = 218
 
     private var dismissThreshold: CGFloat { 140.scale }
     private var dismissTravel: CGFloat { 260.scale }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Диммер: на весь экран; НЕ участвует в переходе
             Color.black.opacity(backgroundOpacity)
                 .ignoresSafeArea()
                 .onTapGesture { dismissThen(from: 0) }
                 .animation(.easeOut(duration: 0.22), value: backgroundOpacity)
 
-            // Панель: анимируем появление/скрытие только её
             sheet
                 .offset(y: sheetOffset)
                 .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.9), value: dragY)
                 .animation(.easeOut(duration: 0.22), value: isDismissing)
                 .animation(.easeOut(duration: 0.20), value: shown)
-                .transition(.move(edge: .bottom).combined(with: .opacity)) // MARK: - Added (только для панели)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
                 .gesture(
                     DragGesture(minimumDistance: 3.scale, coordinateSpace: .local)
                         .updating($dragY) { value, state, _ in
@@ -556,8 +558,6 @@ struct SourcePickerOverlay: View {
         .ignoresSafeArea(edges: .bottom)
     }
 
-    // MARK: Helpers
-
     private var sheetOffset: CGFloat {
         isDismissing ? (endDragY + dismissTravel) : ((shown ? 0 : 40.scale) + max(0, dragY))
     }
@@ -576,22 +576,28 @@ struct SourcePickerOverlay: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { onDismiss() }
     }
 
-    // MARK: Sheet
+    // MARK: - Sheet
 
     private var sheet: some View {
-        VStack(spacing: 0) {
-            // Хэндл сверху
-            RoundedRectangle(cornerRadius: 2.scale, style: .continuous)
-                .fill(Tokens.Color.textSecondary.opacity(0.30))
-                .frame(width: 56.scale, height: 4.scale)
+        ZStack(alignment: .top) {
+            RoundedRectangle(cornerRadius: containerCorner.scale, style: .continuous)
+                .fill(Tokens.Color.backgroundMain)
+
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Spacer(minLength: 0)
+                    RoundedRectangle(cornerRadius: 2.scale, style: .continuous)
+                        .fill(Tokens.Color.textSecondary.opacity(0.30))
+                        .frame(width: handleWidth.scale, height: handleHeight.scale)
+                    Spacer(minLength: 0)
+                }
                 .padding(.top, 8.scale)
 
-            // Контент
-            VStack(alignment: .leading, spacing: 0) {
                 Text("Select a photo or file")
                     .font(Tokens.Font.title)
                     .foregroundColor(Tokens.Color.textPrimary)
                     .padding(.top, titleTop.scale)
+                    .padding(.horizontal, hPadding.scale)
 
                 SourceRow(
                     title: "Files",
@@ -604,6 +610,7 @@ struct SourcePickerOverlay: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) { onFiles() }
                 }
                 .padding(.top, titleToFirstRow.scale)
+                .padding(.horizontal, hPadding.scale)
 
                 SourceRow(
                     title: "Library",
@@ -616,22 +623,16 @@ struct SourcePickerOverlay: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) { onLibrary() }
                 }
                 .padding(.top, gapRows.scale)
+                .padding(.horizontal, hPadding.scale)
             }
-            .padding(.horizontal, hPadding.scale)
-            .padding(.bottom, 16.scale)
         }
-        .frame(maxWidth: .infinity, alignment: .bottom)
-        .background(
-            RoundedRectangle(cornerRadius: containerCorner.scale, style: .continuous)
-                .fill(Tokens.Color.backgroundMain) // без бордера
-        )
+        .frame(maxWidth: .infinity)
+        .frame(height: sheetHeight.scale, alignment: .top)
         .apply(Tokens.Shadow.card)
-        .padding(.horizontal, 12.scale) // как в исходной версии — не на всю ширину
-        .padding(.bottom, 8.scale)
     }
 }
 
-// MARK: Row
+// MARK: - Row
 
 private struct SourceRow: View {
     let title: String
@@ -653,15 +654,15 @@ private struct SourceRow: View {
                     .font(Tokens.Font.bodyMedium18)
                     .foregroundColor(Tokens.Color.textPrimary)
 
-                Spacer()
+                Spacer(minLength: 0)
             }
             .frame(height: rowHeight)
             .padding(.horizontal, 16.scale)
             .background(
                 RoundedRectangle(cornerRadius: rowCorner, style: .continuous)
                     .fill(Tokens.Color.surfaceCard)
-                    .shadow(color: Color.black.opacity(0.10), radius: 5.scale, x: 0, y: 2.scale)
-                    .shadow(color: Color.black.opacity(0.09), radius: 9.scale, x: 0, y: 9.scale)
+                    // MARK: - Changed: мягкая тень, без смещения
+                    .shadow(color: .black.opacity(0.06), radius: 6.scale, x: 0, y: 0)
             )
         }
         .buttonStyle(.plain)
@@ -678,31 +679,31 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 import Swinject
+import UIKit // MARK: - Added (для TabBarAnimator)
 
 struct CheaterView: View {
     @ObservedObject var vm: CheaterViewModel
     @EnvironmentObject private var router: AppRouter
     @Environment(\.resolver) private var resolver
 
-    // Pickers
+    // PhotosPicker
     @State private var photoItem: PhotosPickerItem?
     @State private var showPhotoPicker = false
+
+    // Document picker
     @State private var showFilePicker = false
 
-    // Misc
+    // Optional text conversation
     @State private var conversationText: String = ""
+
+    // Alert after saving
     @State private var showSavedAlert = false
+
+    // Paywall
     @State private var showPaywall = false
 
     // Bottom sheet (overlay)
     @State private var showSourceSheet = false
-
-    // MARK: - Added: базовый нижний safe-area и фантомный инсет под скрытый таббар
-    @State private var baseSafeBottom: CGFloat = 0
-    private let tabBarCoreHeight: CGFloat = 49 // стандартная высота TabBar (без нижней safe-area)
-    private var phantomTabInset: CGFloat { // сколько «подкладываем», чтобы контент не сдвигался
-        (tabBarCoreHeight + baseSafeBottom).scale
-    }
 
     @State private var lastPreviewImage: UIImage? = nil
 
@@ -715,7 +716,9 @@ struct CheaterView: View {
     @State private var path: [CheaterRoute] = []
     @State private var routedResult: TaskResult? = nil
 
-    init(vm: CheaterViewModel) { self.vm = vm }
+    init(vm: CheaterViewModel) {
+        self.vm = vm
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -728,19 +731,13 @@ struct CheaterView: View {
             .navigationTitle(navigationTitle)
             .toolbar(.hidden, for: .navigationBar)
 
-            // MARK: - Changed: фиксируем позицию контента при скрытии таббара
-            // когда SourcePicker открыт (таббар уезжает), подкладываем фантомный инсет = высота таббара + safeBottom
-            .safeAreaPadding(.bottom, showSourceSheet ? phantomTabInset : 0)
-
-            // Прячем TabBar с анимацией (сам таббар уезжает, контент остаётся на месте)
-            .toolbar(showSourceSheet ? .hidden : .visible, for: .tabBar)
-            .animation(.easeInOut(duration: 0.25), value: showSourceSheet)
-
             // --- Pickers
             .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
-            .fileImporter(isPresented: $showFilePicker,
-                          allowedContentTypes: [.pdf, .png, .jpeg, .plainText],
-                          allowsMultipleSelection: false) { result in
+            .fileImporter(
+                isPresented: $showFilePicker,
+                allowedContentTypes: [.pdf, .png, .jpeg, .plainText],
+                allowsMultipleSelection: false
+            ) { result in
                 switch result {
                 case .success(let urls):
                     guard let url = urls.first else { return }
@@ -791,23 +788,26 @@ struct CheaterView: View {
                 PaywallView(vm: paywallVM).presentationDetents([.large])
             }
 
-            // --- Навигация по состояниям VM
+            // --- Навигация по состояниям VM (без автопуша на результат)
             .onChange(of: vm.state) { _, newState in
                 switch newState {
                 case .uploading:
                     if path.last != .uploading { path.append(.uploading) }
                 case .result(let r):
                     routedResult = r // открываем по кнопке
-                default: break
+                default:
+                    break
                 }
             }
 
             // --- Сброс VM при возврате на корень
             .onChange(of: path) { _, newPath in
-                if newPath.isEmpty, vm.state != .idle { vm.goBackToIdle() }
+                if newPath.isEmpty, vm.state != .idle {
+                    vm.goBackToIdle()
+                }
             }
 
-            // --- Экраны
+            // --- Экраны маршрутов
             .navigationDestination(for: CheaterRoute.self) { route in
                 switch route {
                 case .imagePreview:
@@ -854,7 +854,7 @@ struct CheaterView: View {
                 }
             }
         }
-        // Оверлей поверх всего (диммер на весь экран; анимируется только панель внутри)
+        // --- Оверлей поверх всего (диммер на весь экран; анимируется только панель внутри)
         .overlay(alignment: .bottom) {
             if showSourceSheet {
                 SourcePickerOverlay(
@@ -864,26 +864,28 @@ struct CheaterView: View {
                 )
                 .zIndex(1000)
                 .ignoresSafeArea()
+                .onAppear { TabBarAnimator.set(slidDown: true) } // MARK: - Added
+                .onDisappear { TabBarAnimator.set(slidDown: false) } // MARK: - Added
             }
         }
-        // MARK: - Added: фиксируем базовый нижний safe-area один раз
-        .onAppear {
-            if baseSafeBottom == 0 {
-                let inset = (UIApplication.shared.connectedScenes
-                    .compactMap { ($0 as? UIWindowScene)?.keyWindow?.safeAreaInsets.bottom }
-                    .first ?? 0)
-                baseSafeBottom = inset
-            }
+        // Дублируем на случай программного изменения флага (надежность)
+        // MARK: - Added
+        .onChange(of: showSourceSheet) { _, isShown in
+            TabBarAnimator.set(slidDown: isShown)
         }
+        .onDisappear { TabBarAnimator.set(slidDown: false) } // гарантируем возврат
         .enableInteractivePop()
     }
 
-    // --- остальной UI без изменений ---
+    // MARK: - Content & helpers
+
     @ViewBuilder
     private var content: some View {
         switch vm.state {
-        case .idle: idleView
-        default: EmptyView()
+        case .idle:
+            idleView
+        default:
+            EmptyView()
         }
     }
 
@@ -1027,6 +1029,7 @@ struct CheaterView: View {
                 guard isPremium else { showPaywall = true; return }
                 vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
             }
+
             Spacer(minLength: 0)
         }
     }

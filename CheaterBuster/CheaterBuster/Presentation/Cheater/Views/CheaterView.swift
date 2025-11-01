@@ -9,7 +9,7 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 import Swinject
-import UIKit // MARK: - Added (для TabBarAnimator)
+import UIKit // для TabBarAnimator
 
 struct CheaterView: View {
     @ObservedObject var vm: CheaterViewModel
@@ -35,10 +35,14 @@ struct CheaterView: View {
     // Bottom sheet (overlay)
     @State private var showSourceSheet = false
 
+    // Кеши выбора
     @State private var lastPreviewImage: UIImage? = nil
+    @State private var lastFileName: String? = nil
+    @State private var lastFileData: Data? = nil
 
     private enum CheaterRoute: Hashable {
         case imagePreview
+        case filePreview
         case uploading
         case result
     }
@@ -46,9 +50,10 @@ struct CheaterView: View {
     @State private var path: [CheaterRoute] = []
     @State private var routedResult: TaskResult? = nil
 
-    init(vm: CheaterViewModel) {
-        self.vm = vm
-    }
+    init(vm: CheaterViewModel) { self.vm = vm }
+
+    // MARK: - Helpers
+    private var isFileContext: Bool { lastPreviewImage == nil && lastFileName != nil }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -61,13 +66,11 @@ struct CheaterView: View {
             .navigationTitle(navigationTitle)
             .toolbar(.hidden, for: .navigationBar)
 
-            // --- Pickers
+            // Pickers
             .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
-            .fileImporter(
-                isPresented: $showFilePicker,
-                allowedContentTypes: [.pdf, .png, .jpeg, .plainText],
-                allowsMultipleSelection: false
-            ) { result in
+            .fileImporter(isPresented: $showFilePicker,
+                          allowedContentTypes: [.pdf, .png, .jpeg, .plainText],
+                          allowsMultipleSelection: false) { result in
                 switch result {
                 case .success(let urls):
                     guard let url = urls.first else { return }
@@ -76,6 +79,9 @@ struct CheaterView: View {
                     do {
                         let data = try Data(contentsOf: url)
                         vm.showFile(name: url.lastPathComponent, data: data)
+                        lastFileName = url.lastPathComponent
+                        lastFileData = data
+                        if path.last != .filePreview { path.append(.filePreview) }
                     } catch {
                         vm.presentError("Failed to read file: \(error.localizedDescription)")
                     }
@@ -84,7 +90,7 @@ struct CheaterView: View {
                 }
             }
 
-            // --- Фото -> UIImage
+            // Фото -> UIImage
             .onChange(of: photoItem) { item in
                 guard let item else { return }
                 Task {
@@ -93,6 +99,8 @@ struct CheaterView: View {
                         await MainActor.run {
                             vm.showImage(img)
                             lastPreviewImage = img
+                            lastFileName = nil
+                            lastFileData = nil
                             path.append(.imagePreview)
                         }
                     } else {
@@ -102,7 +110,7 @@ struct CheaterView: View {
                 }
             }
 
-            // --- Saved alert
+            // Saved alert
             .onChange(of: vm.didSave) { _, saved in
                 guard saved else { return }
                 showSavedAlert = true
@@ -112,32 +120,33 @@ struct CheaterView: View {
                 Button("OK", role: .cancel) { }
             }
 
-            // --- Paywall
+            // Paywall
             .fullScreenCover(isPresented: $showPaywall) {
                 let paywallVM = resolver.resolve(PaywallViewModel.self)!
                 PaywallView(vm: paywallVM).presentationDetents([.large])
             }
 
-            // --- Навигация по состояниям VM (без автопуша на результат)
+            // Навигация по состояниям VM
             .onChange(of: vm.state) { _, newState in
                 switch newState {
+                case .previewFile(let name, let data):
+                    lastPreviewImage = nil
+                    lastFileName = name; lastFileData = data
+                    if path.last != .filePreview { path.append(.filePreview) }
                 case .uploading:
                     if path.last != .uploading { path.append(.uploading) }
                 case .result(let r):
-                    routedResult = r // открываем по кнопке
-                default:
-                    break
+                    routedResult = r // откроем по кнопке
+                default: break
                 }
             }
 
-            // --- Сброс VM при возврате на корень
+            // Сброс VM при возврате на корень
             .onChange(of: path) { _, newPath in
-                if newPath.isEmpty, vm.state != .idle {
-                    vm.goBackToIdle()
-                }
+                if newPath.isEmpty, vm.state != .idle { vm.goBackToIdle() }
             }
 
-            // --- Экраны маршрутов
+            // Экраны
             .navigationDestination(for: CheaterRoute.self) { route in
                 switch route {
                 case .imagePreview:
@@ -151,21 +160,19 @@ struct CheaterView: View {
                     .navigationBarBackButtonHidden(true)
                     .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
 
-                case .uploading:
-                    switch vm.state {
-                    case .uploading(let p):
-                        uploadingView(progress: p)
-                            .navigationBarBackButtonHidden(true)
-                            .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
-                    case .result:
-                        uploadingView(progress: 100)
-                            .navigationBarBackButtonHidden(true)
-                            .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
-                    default:
-                        uploadingView(progress: 0)
-                            .navigationBarBackButtonHidden(true)
-                            .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
+                case .filePreview:
+                    Group {
+                        if let name = lastFileName, let data = lastFileData {
+                            filePreview(name: name, data: data)
+                        } else {
+                            VStack { Text("No file").foregroundColor(.red); Spacer() }
+                        }
                     }
+                    .navigationBarBackButtonHidden(true)
+                    .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
+
+                case .uploading:
+                    uploadingScreen()
 
                 case .result:
                     if let r = routedResult {
@@ -184,7 +191,7 @@ struct CheaterView: View {
                 }
             }
         }
-        // --- Оверлей поверх всего (диммер на весь экран; анимируется только панель внутри)
+        // overlay выбора источника
         .overlay(alignment: .bottom) {
             if showSourceSheet {
                 SourcePickerOverlay(
@@ -194,28 +201,21 @@ struct CheaterView: View {
                 )
                 .zIndex(1000)
                 .ignoresSafeArea()
-                .onAppear { TabBarAnimator.set(slidDown: true) } // MARK: - Added
-                .onDisappear { TabBarAnimator.set(slidDown: false) } // MARK: - Added
+                .onAppear { TabBarAnimator.set(slidDown: true) }
+                .onDisappear { TabBarAnimator.set(slidDown: false) }
             }
         }
-        // Дублируем на случай программного изменения флага (надежность)
-        // MARK: - Added
-        .onChange(of: showSourceSheet) { _, isShown in
-            TabBarAnimator.set(slidDown: isShown)
-        }
-        .onDisappear { TabBarAnimator.set(slidDown: false) } // гарантируем возврат
+        .onChange(of: showSourceSheet) { _, isShown in TabBarAnimator.set(slidDown: isShown) }
+        .onDisappear { TabBarAnimator.set(slidDown: false) }
         .enableInteractivePop()
     }
 
-    // MARK: - Content & helpers
-
+    // MARK: - Root content
     @ViewBuilder
     private var content: some View {
         switch vm.state {
-        case .idle:
-            idleView
-        default:
-            EmptyView()
+        case .idle: idleView
+        default: EmptyView()
         }
     }
 
@@ -236,13 +236,13 @@ struct CheaterView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
+    // MARK: - Image preview
     private func imagePreview(_ img: UIImage) -> some View {
         VStack(spacing: 0) {
-            header
+            header(title: "Image analysis")
             ScrollView {
                 VStack(spacing: 20.scale) {
-                    imageCard(image: img)
-                        .onAppear { lastPreviewImage = img }
+                    imageCard(image: img).onAppear { lastPreviewImage = img }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 8.scale)
@@ -262,31 +262,109 @@ struct CheaterView: View {
         .background(Tokens.Color.backgroundMain.ignoresSafeArea())
     }
 
-    private func uploadingView(progress p: Int) -> some View {
+    // MARK: - Files preview (центрирование)  // MARK: - Changed
+    private func filePreview(name: String, data: Data) -> some View {
         VStack(spacing: 0) {
-            header
-            ScrollView {
-                VStack(spacing: 20.scale) {
-                    if let img = lastPreviewImage {
-                        imageCard(image: img)
-                    }
-                    Text("\(p)%")
-                        .font(.system(size: 20, weight: .bold))
-                        .tracking(-0.20)
-                        .foregroundColor(Tokens.Color.textPrimary)
-                        .multilineTextAlignment(.center)
-                    ProgressBar(progress: max(0, min(1, Double(p) / 100.0)))
-                        .frame(width: 260.scale, height: 8.scale)
-                        .padding(.top, 8.scale)
+            header(title: "Files analysis")
+            VStack(spacing: 16.scale) {
+                Spacer(minLength: 0)
+
+                ZStack {
+                    RoundedRectangle(cornerRadius: 22.scale, style: .continuous)
+                        .fill(Color.white)
+                        .shadow(color: Color.black.opacity(0.06), radius: 8.scale, x: 0, y: 0)
+
+                    Image("ic_file_analysis_placeholder")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 64.scale, height: 64.scale)
+                        .accessibilityHidden(true)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 8.scale)
+                .frame(width: 112.scale, height: 112.scale)
+
+                Text(name)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(Color(hex: "#141414"))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .padding(.horizontal, 16.scale)
+
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 8.scale)
+
             VStack(spacing: 12.scale) {
-                PrimaryButton("View analysis report") {
-                    if path.last != .result {
-                        path.append(.result)
+                PrimaryButton("Analyse") {
+                    let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                    guard isPremium else { showPaywall = true; return }
+                    vm.showFile(name: name, data: data) // держим контекст файла
+                    vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
+                }
+            }
+            .padding(.horizontal, 16.scale)
+            .padding(.top, 16.scale)
+            .padding(.bottom, 24.scale)
+        }
+        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+    }
+
+    // MARK: - Uploading screen с карточкой и нижней зоной  // MARK: - Changed
+    @ViewBuilder
+    private func uploadingScreen() -> some View {
+        let p: Int = {
+            if case let .uploading(val) = vm.state { return val }
+            if case .result = vm.state { return 100 }
+            return 0
+        }()
+
+        VStack(spacing: 0) {
+            header(title: isFileContext ? "Files analysis" : "Image analysis") // меняем заголовок
+
+            // Центр: показываем карточку как на экране анализа
+            VStack(spacing: 16.scale) {
+                Spacer(minLength: 0)
+
+                if let img = lastPreviewImage {
+                    imageCard(image: img)
+                        .padding(.horizontal, 8.scale)
+                } else if let name = lastFileName {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 22.scale, style: .continuous)
+                            .fill(Color.white)
+                            .shadow(color: Color.black.opacity(0.06), radius: 8.scale, x: 0, y: 0)
+
+                        Image("ic_file_analysis_placeholder")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 64.scale, height: 64.scale)
                     }
+                    .frame(width: 112.scale, height: 112.scale)
+
+                    Text(name)
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(Color(hex: "#141414"))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .padding(.horizontal, 16.scale)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8.scale)
+
+            // Низ: проценты + ProgressBar + кнопка
+            VStack(spacing: 12.scale) {
+                Text("\(p)%")
+                    .font(.system(size: 20, weight: .bold))
+                    .tracking(-0.20)
+                    .foregroundColor(Tokens.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+
+                ProgressBar(progress: max(0, min(1, Double(p) / 100.0)))
+                    .frame(width: 260.scale, height: 8.scale)
+
+                PrimaryButton("View analysis report") {
+                    if path.last != .result { path.append(.result) }
                 }
                 .disabled(p < 100)
                 .opacity(p < 100 ? 0.6 : 1)
@@ -296,19 +374,18 @@ struct CheaterView: View {
             .padding(.bottom, 24.scale)
         }
         .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+        .navigationBarBackButtonHidden(true)
+        .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
     }
 
-    private var header: some View {
+    // MARK: - Общий заголовок
+    private func header(title: String) -> some View {
         HStack {
             BackButton(size: 44.scale) {
-                if !path.isEmpty {
-                    _ = path.popLast()
-                } else {
-                    vm.goBackToIdle()
-                }
+                if !path.isEmpty { _ = path.popLast() } else { vm.goBackToIdle() }
             }
             Spacer()
-            Text("Image analysis")
+            Text(title)
                 .font(.system(size: 18, weight: .medium))
                 .tracking(-0.18)
                 .foregroundColor(Tokens.Color.textPrimary)
@@ -319,6 +396,7 @@ struct CheaterView: View {
         .padding(.bottom, 12.scale)
     }
 
+    // MARK: - Вспомогательные
     private func imageCard(image: UIImage) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: Tokens.Radius.medium.scale, style: .continuous)
@@ -340,30 +418,6 @@ struct CheaterView: View {
         .padding(.horizontal, 8.scale)
     }
 
-    private func filePreview(name: String) -> some View {
-        VStack(spacing: Tokens.Spacing.x16) {
-            VStack(spacing: Tokens.Spacing.x12) {
-                Image(systemName: "folder")
-                    .resizable().scaledToFit()
-                    .frame(width: 112.scale, height: 112.scale)
-                    .foregroundColor(Tokens.Color.textSecondary)
-                Text(name)
-                    .font(Tokens.Font.body)
-                    .foregroundColor(Tokens.Color.textPrimary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.top, Tokens.Spacing.x16)
-
-            PrimaryButton("Analyse") {
-                let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
-                guard isPremium else { showPaywall = true; return }
-                vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
-            }
-
-            Spacer(minLength: 0)
-        }
-    }
-
     private func errorView(_ msg: String) -> some View {
         VStack(spacing: Tokens.Spacing.x16) {
             Text(msg).font(Tokens.Font.body).foregroundColor(.red).multilineTextAlignment(.center)
@@ -376,7 +430,8 @@ struct CheaterView: View {
     private var navigationTitle: String {
         switch vm.state {
         case .idle: return "Cheater"
-        case .previewImage, .previewFile, .uploading, .result, .error: return "Image analysis"
+        case .previewImage, .previewFile, .uploading, .result, .error:
+            return isFileContext ? "Files analysis" : "Image analysis" // MARK: - Changed
         }
     }
 }

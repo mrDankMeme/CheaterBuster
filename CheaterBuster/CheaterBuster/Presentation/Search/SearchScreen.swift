@@ -10,25 +10,22 @@ import Swinject
 
 struct SearchScreen: View {
     @State private var goPhoto = false
-    private let vm: SearchViewModel
+    @State private var goResults = false
 
+    private let vm: SearchViewModel
     init(vm: SearchViewModel) { self.vm = vm }
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: Tokens.Spacing.x16.scale) {
-                // MARK: - Заголовок
+            VStack(alignment: .leading, spacing: 24.scale) {
                 Text("Find your partner")
                     .font(.system(size: 28.scale, weight: .medium))
                     .foregroundStyle(Color(hex: "#141414"))
                     .padding(.top, Tokens.Spacing.x8.scale)
 
-                // MARK: - Карточка
-                Button {
-                    goPhoto = true
-                } label: {
+                Button { goPhoto = true } label: {
                     VStack(spacing: 16.scale) {
-                        Image("faceSearchIcon") // добавь в Assets
+                        Image("faceSearchIcon")
                             .renderingMode(.original)
                             .resizable()
                             .scaledToFit()
@@ -52,8 +49,14 @@ struct SearchScreen: View {
             }
             .padding(.horizontal, Tokens.Spacing.x16.scale)
             .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+
             .navigationDestination(isPresented: $goPhoto) {
-                FaceSearchView(vm: vm)
+                FaceSearchView(vm: vm, onFinished: { goResults = true })
+                    .navigationBarBackButtonHidden(true)
+            }
+            .navigationDestination(isPresented: $goResults) {
+                SearchResultsView(results: vm.results, mode: .face)
+                    .navigationBarBackButtonHidden(true)
             }
         }
     }

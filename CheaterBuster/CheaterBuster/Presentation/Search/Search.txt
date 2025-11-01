@@ -145,193 +145,233 @@ final class SearchViewModel: ObservableObject {
 //  FaceSearchView.swift
 //  CheaterBuster
 //
-//  Created by Niiaz Khasanov on 10/27/25.
+//  Created by Niiaz Khasanov on 11/01/25.
 //
 
 import SwiftUI
 import PhotosUI
+import Swinject
 import UIKit
-import Swinject // MARK: - Added
 
 struct FaceSearchView: View {
     @ObservedObject var vm: SearchViewModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.resolver) private var resolver // MARK: - Added
+    @Environment(\.resolver) private var resolver
 
     @State private var item: PhotosPickerItem?
     @State private var image: UIImage?
 
-    @State private var goResults = false
+    // Поворот/масштаб
+    @State private var rotationAngle: Angle = .zero              // кратно 90°
+    @State private var userZoom: CGFloat = 1.0                   // ручной zoom (resize кнопка)
+
     @State private var didAnalyze = false
-    @State private var showPaywall = false // MARK: - Added
+    @State private var showPaywall = false
+
+    let onFinished: () -> Void
+
+    init(vm: SearchViewModel, onFinished: @escaping () -> Void) {
+        self.vm = vm
+        self.onFinished = onFinished
+    }
 
     var body: some View {
         ZStack {
             Tokens.Color.backgroundMain.ignoresSafeArea()
 
-            VStack(spacing: Tokens.Spacing.x16) {
-                // Header
+            VStack(spacing: 0) {
+                // MARK: Header — как в Cheater
                 HStack {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "arrow.left")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Tokens.Color.textPrimary)
-                            .padding(12)
-                            .background(
-                                Tokens.Color.surfaceCard,
-                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            )
-                            .apply(Tokens.Shadow.card)
+                    Button { dismiss() } label: {
+                        ZStack {
+                            Circle()
+                                .fill(.white)
+                                .frame(width: 44.scale, height: 44.scale)
+                                .shadow(color: Tokens.Color.shadowBlack7, radius: 9.scale, x: 0, y: 0)
+
+                            Image("backArrow")
+                                .resizable()
+                                .renderingMode(.template)
+                                .scaledToFit()
+                                .frame(width: 20.scale, height: 20.scale)
+                                .foregroundStyle(Color(hex: "#141414"))
+                        }
                     }
+                    .buttonStyle(.plain)
 
                     Spacer()
 
                     Text("Face search")
-                        .font(Tokens.Font.title)
-                        .foregroundStyle(Tokens.Color.textPrimary)
+                        .font(.system(size: 18.scale, weight: .medium))
+                        .foregroundStyle(Color(hex: "#141414"))
 
-                    Spacer().frame(width: 44)
+                    Spacer()
+                    Color.clear.frame(width: 44.scale, height: 44.scale)
                 }
-                .padding(.horizontal, Tokens.Spacing.x16)
-                .padding(.top, Tokens.Spacing.x16)
+                .padding(.horizontal, 16.scale)
+                .padding(.top, 16.scale)
 
-                // Preview
-                Group {
-                    if let img = image {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, Tokens.Spacing.x16)
-                            .padding(.top, Tokens.Spacing.x12)
-                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                    .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+                // MARK: Preview — всегда AspectFit с учётом поворота
+                GeometryReader { geo in
+                    ZStack {
+                        if let uiImage = image {
+                            let fitScale = computeFitScale(
+                                image: uiImage,
+                                container: geo.size,
+                                angle: rotationAngle
                             )
-                    } else {
-                        ContentUnavailableView(
-                            "Select a photo",
-                            systemImage: "photo",
-                            description: Text("Pick one image to search by face.")
-                        )
-                        .padding(.horizontal, Tokens.Spacing.x16)
-                        .padding(.top, Tokens.Spacing.x32)
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFit() // базовое aspectFit
+                                .rotationEffect(rotationAngle)
+                                .scaleEffect(fitScale * userZoom) // подгон + пользовательский zoom
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .clipped()
+                                .animation(.easeInOut(duration: 0.22), value: rotationAngle)
+                                .animation(.easeInOut(duration: 0.22), value: userZoom)
+                        } else {
+                            ContentUnavailableView(
+                                "Select a photo",
+                                systemImage: "photo",
+                                description: Text("Pick one image to search by face.")
+                            )
+                        }
                     }
                 }
 
-                Spacer(minLength: 0)
+                // MARK: Bottom controls
+                HStack(spacing: 16.scale) {
+                    // Центрированный блок из трёх кнопок
+                    HStack(spacing: 16.scale) {
+                        ControlButton(asset: "rotateLeft") {
+                            withAnimation { rotationAngle -= .degrees(90) }
+                        }
+                        ControlButton(asset: "rotateRight") {
+                            withAnimation { rotationAngle += .degrees(90) }
+                        }
+                        ControlButton(asset: "resize") {
+                            withAnimation { userZoom = (abs(userZoom - 1.0) < 0.001) ? 1.2 : 1.0 }
+                        }
+                    }
+                    .frame(maxWidth: .infinity) // ✅ строго по центру
+
+                    // Next — справа
+                    Button {
+                        guard let img = image,
+                              let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
+
+                        let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                        guard isPremium else { showPaywall = true; return }
+
+                        didAnalyze = true
+                        vm.runImageSearch(jpegData: jpeg)
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Tokens.Color.accent) // ✅ accent
+                                .frame(width: 48.scale, height: 48.scale)
+                                .shadow(color: Tokens.Color.shadowBlack7, radius: 9.scale, x: 0, y: 0)
+
+                            Image("nextArrow")
+                                .resizable()
+                                .renderingMode(.template)
+                                .scaledToFit()
+                                .frame(width: 20.scale, height: 20.scale) // ✅ 20×20
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(image == nil || vm.isLoading)
+                }
+                .padding(.horizontal, 24.scale)
+                .padding(.vertical, 20.scale)
+                .background(
+                    Tokens.Color.surfaceCard,
+                    ignoresSafeAreaEdges: .bottom
+                )
             }
         }
         .navigationBarBackButtonHidden(true)
 
-        // Bottom tools panel
-        .safeAreaInset(edge: .bottom) {
-            HStack(spacing: Tokens.Spacing.x16) {
-                CircleTool(system: "rotate.left")  { /* позже */ }
-                CircleTool(system: "rotate.right") { /* позже */ }
-                CircleTool(system: "crop")         { /* позже */ }
-
-                Spacer()
-
-                // Pink CTA →
-                Button {
-                    guard let img = image,
-                          let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
-                    // MARK: - Added (premium gate)
-                    let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
-                    guard isPremium else {
-                        showPaywall = true
-                        return
-                    }
-                    didAnalyze = true
-                    vm.runImageSearch(jpegData: jpeg)
-                } label: {
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 52, height: 52)
-                        .background(
-                            Tokens.Color.accent,
-                            in: Circle()
-                        )
-                        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-                }
-                .buttonStyle(.plain)
-                .disabled(image == nil || vm.isLoading)
-            }
-            .padding(.horizontal, Tokens.Spacing.x20)
-            .padding(.vertical, Tokens.Spacing.x16)
-            .background(
-                Tokens.Color.surfaceCard,
-                ignoresSafeAreaEdges: .bottom
-            )
-        }
-
         // Photos picker
-        .photosPicker(isPresented: Binding(
-            get: { image == nil && item == nil }, set: { _ in }
-        ), selection: $item, matching: .images)
-
+        .photosPicker(isPresented: Binding(get: { image == nil && item == nil }, set: { _ in }),
+                      selection: $item, matching: .images)
         .onChange(of: item) { _, newValue in
             Task { @MainActor in
                 guard let data = try? await newValue?.loadTransferable(type: Data.self),
                       let img = UIImage(data: data) else { return }
                 image = img
+                rotationAngle = .zero
+                userZoom = 1.0
             }
         }
 
-        // Навигация к результатам
+        // Завершение анализа → пушим результаты
         .onChange(of: vm.isLoading) { was, isNow in
             if didAnalyze && was == true && isNow == false {
                 didAnalyze = false
-                goResults = true
+                onFinished()
             }
         }
-        .navigationDestination(isPresented: $goResults) {
-            SearchResultsView(results: vm.results, mode: .face)
-        }
 
-        // Блокирующая "загрузка"
-        .fullScreenCover(
-            isPresented: Binding(
-                get: { vm.isBlockingLoading },
-                set: { _ in }
-            )
-        ) {
+        // Full-screen loading
+        .fullScreenCover(isPresented: Binding(get: { vm.isBlockingLoading }, set: { _ in })) {
             LoadingView(mode: .face, previewImage: image, cancelAction: nil)
                 .interactiveDismissDisabled(true)
         }
 
-        // MARK: - Added Paywall
+        // Paywall
         .fullScreenCover(isPresented: $showPaywall) {
             let paywallVM = resolver.resolve(PaywallViewModel.self)!
-            PaywallView(vm: paywallVM)
-                .presentationDetents([.large])
+            PaywallView(vm: paywallVM).presentationDetents([.large])
         }
+    }
+
+    /// Расчёт масштабирования для идеального AspectFit при 0°/90°/180°/270°
+    private func computeFitScale(image: UIImage, container: CGSize, angle: Angle) -> CGFloat {
+        // нормализуем угол к [0,360)
+        let deg = abs(Int(angle.degrees)) % 360
+        let swap = (deg == 90 || deg == 270)
+
+        // реальный размер картинки в поинтах
+        let iw = image.size.width
+        let ih = image.size.height
+
+        // при 90/270 меняются местами оси
+        let targetW = swap ? ih : iw
+        let targetH = swap ? iw : ih
+
+        let sx = container.width  / targetW
+        let sy = container.height / targetH
+        return min(sx, sy)
     }
 }
 
-private struct CircleTool: View {
-    let system: String
+// MARK: - Универсальная кружковая кнопка 48×48 с тенью и иконкой 20×20
+private struct ControlButton: View {
+    let asset: String
     let action: () -> Void
+
     var body: some View {
         Button(action: action) {
-            Image(systemName: system)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Tokens.Color.textPrimary)
-                .frame(width: 48, height: 48)
-                .background(
-                    Tokens.Color.backgroundMain,
-                    in: Circle()
-                )
-                .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+            ZStack {
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 48.scale, height: 48.scale)
+                    .shadow(color: Tokens.Color.shadowBlack7, radius: 9.scale, x: 0, y: 0)
+
+                Image(asset)
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: 20.scale, height: 20.scale)
+                    .foregroundStyle(Color(hex: "#141414"))
+            }
         }
         .buttonStyle(.plain)
     }
 }
+//
 //  SearchScreen.swift
 //  CheaterBuster
 //
@@ -339,75 +379,59 @@ private struct CircleTool: View {
 //
 
 import SwiftUI
+import Swinject
 
 struct SearchScreen: View {
-    // MARK: - Removed: goName (больше не нужен)
     @State private var goPhoto = false
-    private let vm: SearchViewModel
+    @State private var goResults = false
 
+    private let vm: SearchViewModel
     init(vm: SearchViewModel) { self.vm = vm }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: Tokens.Spacing.x16) {
+            VStack(alignment: .leading, spacing: 24.scale) {
                 Text("Find your partner")
-                    .font(Tokens.Font.h2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, Tokens.Spacing.x8)
+                    .font(.system(size: 28.scale, weight: .medium))
+                    .foregroundStyle(Color(hex: "#141414"))
+                    .padding(.top, Tokens.Spacing.x8.scale)
 
-                VStack(spacing: Tokens.Spacing.x12) {
-                    // MARK: - Removed: карточка текстового поиска
-                    // CardRow(icon: "text.magnifyingglass",
-                    //         title: "Search for a partner by name") { goName = true }
+                Button { goPhoto = true } label: {
+                    VStack(spacing: 16.scale) {
+                        Image("faceSearchIcon")
+                            .renderingMode(.original)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 40.scale, height: 40.scale)
 
-                    // Оставляем только поиск по фото
-                    CardRow(
-                        icon: "face.smiling",
-                        title: "Finding a partner by face"
-                    ) { goPhoto = true }
+                        Text("Finding a partner by face")
+                            .font(.system(size: 16.scale, weight: .regular))
+                            .foregroundStyle(Color(hex: "#141414"))
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 160.scale)
+                    .background(
+                        RoundedRectangle(cornerRadius: 22.scale, style: .continuous)
+                            .fill(Color.white)
+                    )
+                    .shadow(color: Color(hex: "#ACACAC").opacity(0.1),
+                            radius: 9.scale, y: 2.scale)
                 }
+                .buttonStyle(.plain)
 
                 Spacer()
             }
-            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.horizontal, Tokens.Spacing.x16.scale)
             .background(Tokens.Color.backgroundMain.ignoresSafeArea())
 
-            // MARK: - Removed: navigationDestination для NameSearchView
             .navigationDestination(isPresented: $goPhoto) {
-                FaceSearchView(vm: vm)
+                FaceSearchView(vm: vm, onFinished: { goResults = true })
+                    .navigationBarBackButtonHidden(true)
+            }
+            .navigationDestination(isPresented: $goResults) {
+                SearchResultsView(results: vm.results, mode: .face)
+                    .navigationBarBackButtonHidden(true)
             }
         }
-    }
-}
-
-private struct CardRow: View {
-    let icon: String
-    let title: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: Tokens.Spacing.x12) {
-                Image(systemName: icon)
-                    .frame(width: 28, height: 28)
-                    .foregroundStyle(Tokens.Color.accent)
-                    .background(
-                        Tokens.Color.accent.opacity(0.1),
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    )
-                Text(title)
-                    .foregroundStyle(Tokens.Color.textPrimary)
-                Spacer()
-            }
-            .padding(.vertical, Tokens.Spacing.x12)
-            .padding(.horizontal, Tokens.Spacing.x12)
-            .background(
-                Tokens.Color.surfaceCard,
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-            )
-            .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
-        }
-        .buttonStyle(.plain)
     }
 }
 //
