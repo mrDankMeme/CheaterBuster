@@ -63,6 +63,52 @@ extension UIEdgeInsets: Scalable {
     }
 }
 //
+//  TabBarAnimator.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 11/1/25.
+//
+
+
+//
+//  TabBarAnimator.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 11/01/25.
+//
+
+import UIKit
+
+/// Сдвигает системный UITabBar вниз/назад анимацией без изменения safe area и лейаута контента.
+/// Использовать только из Presentation-слоя.
+enum TabBarAnimator {
+
+    /// Сдвинуть таббар вниз (true) или вернуть на место (false).
+    static func set(slidDown: Bool, duration: TimeInterval = 0.25) {
+        guard let tabBar = findTabBar() else { return }
+        let h = tabBar.bounds.height
+        UIView.animate(withDuration: duration) {
+            tabBar.transform = slidDown ? CGAffineTransform(translationX: 0, y: h + 20) : .identity
+        }
+    }
+
+    /// Найти системный UITabBar в иерархии текущего окна.
+    private static func findTabBar() -> UITabBar? {
+        guard let window = (UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+            .first) else { return nil }
+        return search(in: window)
+    }
+
+    private static func search(in view: UIView) -> UITabBar? {
+        if let bar = view as? UITabBar { return bar }
+        for sub in view.subviews {
+            if let found = search(in: sub) { return found }
+        }
+        return nil
+    }
+}
+//
 //  InMemoryTokenStorage.swift
 //  CheaterBuster
 //
@@ -2399,7 +2445,8 @@ public struct CheaterRecord: Identifiable, Hashable, Codable {
 
 import SwiftUI
 import Swinject
-import StoreKit // MARK: - Added
+import StoreKit
+import UIKit
 
 struct SettingsScreen: View {
     @StateObject private var vm: SettingsViewModel
@@ -2407,13 +2454,13 @@ struct SettingsScreen: View {
     @Environment(\.resolver) private var resolver
     @State private var showPaywall = false
 
-    // MARK: - Added (константы)
+    // MARK: - Константы
     private let supportEmail = "support@cheaterbuster.app"
     private let termsURL = URL(string: "https://cheaterbuster.app/terms")!
     private let privacyURL = URL(string: "https://cheaterbuster.app/privacy")!
     private let shareText = "Cheater Buster — check profiles and chats: https://cheaterbuster.app"
 
-    // MARK: - Added (share sheet)
+    // Share sheet
     @State private var showShareSheet = false
 
     init(vm: SettingsViewModel) {
@@ -2423,100 +2470,99 @@ struct SettingsScreen: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: Tokens.Spacing.x24) {
+                VStack(spacing: Tokens.Spacing.x24.scale) {
 
-                    // Блок Premium
+                    // MARK: - Premium
                     groupCard {
-                        navRow(
-                            system: "chart.bar.doc.horizontal.fill",
-                            tint: Tokens.Color.accent,
-                            title: "Get a premium"
+                        navRowAsset(
+                            asset: "premium",
+                            title: "Get a premium",
+                            tint: Tokens.Color.accent
                         ) {
                             showPaywall = true
                         }
 
-                        Divider().padding(.leading, 52)
+                        Divider().padding(.leading, 52.scale)
 
-                        navRow(
-                            system: "arrow.clockwise.circle.fill",
-                            tint: Tokens.Color.accent,
-                            title: "Restore purchases"
+                        navRowAsset(
+                            asset: "restore",
+                            title: "Restore purchases",
+                            tint: Tokens.Color.accent
                         ) {
-                            // Восстановление доступно на Paywall — оставляем текущий поток (не меняем контракты)
                             showPaywall = true
                         }
                     }
 
-                    // Блок Info
+                    // MARK: - Info
                     groupCard {
-                        navRow(system: "bubble.left.and.bubble.right.fill",
-                               tint: Tokens.Color.accent,
-                               title: "Support") {
+                        navRowAsset(
+                            asset: "support",
+                            title: "Support",
+                            tint: Tokens.Color.accent
+                        ) {
                             openSupport()
                         }
 
-                        Divider().padding(.leading, 52)
+                        Divider().padding(.leading, 52.scale)
 
-                        navRow(system: "doc.text.fill",
-                               tint: Tokens.Color.accent,
-                               title: "Terms of Use") {
+                        navRowAsset(
+                            asset: "termsOfUse",
+                            title: "Terms of Use",
+                            tint: Tokens.Color.accent
+                        ) {
                             openURL(termsURL)
                         }
 
-                        Divider().padding(.leading, 52)
+                        Divider().padding(.leading, 52.scale)
 
-                        navRow(system: "shield.fill",
-                               tint: Tokens.Color.accent,
-                               title: "Privacy Policy") {
+                        navRowAsset(
+                            asset: "privacyPolicy",
+                            title: "Privacy Policy",
+                            tint: Tokens.Color.accent
+                        ) {
                             openURL(privacyURL)
                         }
                     }
 
-                    // Блок Rate/Share
+                    // MARK: - Rate / Share
                     groupCard {
-                        navRow(system: "star.fill",
-                               tint: Tokens.Color.accent,
-                               title: "Rate Us") {
+                        navRowAsset(
+                            asset: "rateUs",
+                            title: "Rate Us",
+                            tint: Tokens.Color.accent
+                        ) {
                             SKStoreReviewController.requestReview()
                         }
 
-                        Divider().padding(.leading, 52)
+                        Divider().padding(.leading, 52.scale)
 
-                        navRow(system: "square.and.arrow.up.fill",
-                               tint: Tokens.Color.accent,
-                               title: "Share with friends") {
+                        navRowAsset(
+                            asset: "shareWithFriends",
+                            title: "Share with friends",
+                            tint: Tokens.Color.accent
+                        ) {
                             showShareSheet = true
                         }
                     }
 
-                    // Опция «Save history»
-                    groupCard {
-                        HStack(spacing: Tokens.Spacing.x12) {
-                            Image(systemName: "clock.arrow.circlepath")
-                                .foregroundStyle(Tokens.Color.accent)
-                                .frame(width: 28, height: 28)
-                            Toggle("Save history", isOn: $vm.isHistoryEnabled)
-                                .tint(Tokens.Color.accent)
-                        }
-                        .padding(.horizontal, Tokens.Spacing.x12)
-                        .padding(.vertical, Tokens.Spacing.x12)
-                    }
+                    // MARK: - Save history (скрыто)
+                    // (секция временно удалена по задаче)
                 }
-                .padding(.horizontal, Tokens.Spacing.x16)
-                .padding(.top, Tokens.Spacing.x16)
+                .padding(.horizontal, Tokens.Spacing.x16.scale)
+                .padding(.top,       Tokens.Spacing.x16.scale)
             }
             .background(Tokens.Color.backgroundMain.ignoresSafeArea())
             .navigationTitle("Settings")
         }
+        // Все модальные — overFullScreen
         .fullScreenCover(isPresented: $showPaywall) {
-            // Resolve VM из DI при показе
             let paywallVM = resolver.resolve(PaywallViewModel.self)!
             PaywallView(vm: paywallVM)
-                .presentationDetents([.large])
+                .ignoresSafeArea()
         }
-        // MARK: - Added: Share sheet
         .fullScreenCover(isPresented: $showShareSheet) {
             ActivityView(activityItems: [shareText])
+                .ignoresSafeArea()
         }
     }
 
@@ -2528,42 +2574,54 @@ struct SettingsScreen: View {
             content()
         }
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 16.scale, style: .continuous)
                 .fill(Tokens.Color.surfaceCard)
         )
         .apply(Tokens.Shadow.card)
     }
 
-    private func navRow(system: String, tint: Color, title: String, action: @escaping () -> Void) -> some View {
+    /// Ряд настроек с иконкой из ассетов (левая иконка 20×20, chevron — кастомный ассет)
+    private func navRowAsset(asset: String, title: String, tint: SwiftUI.Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: Tokens.Spacing.x12) {
-                Image(systemName: system)
+            HStack(spacing: Tokens.Spacing.x12.scale) {
+                assetIcon(asset)
                     .foregroundStyle(tint)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 20.scale, height: 20.scale)
 
                 Text(title)
-                    .font(Tokens.Font.body)
-                    .foregroundStyle(Tokens.Color.textPrimary)
+                    .font(.system(size: 16.scale, weight: .regular))
+                    .foregroundStyle(Color(hex: "#121212"))
 
-                Spacer()
+                Spacer(minLength: 0)
 
-                Image(systemName: "chevron.right")
+                Image("chevronRight")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
                     .foregroundStyle(Tokens.Color.textSecondary.opacity(0.8))
+                    .frame(width: 20.scale, height: 20.scale)
+                    .padding(.trailing, 4.scale) // ✅ Добавлен нужный отступ
             }
-            .padding(.horizontal, Tokens.Spacing.x12)
-            .padding(.vertical, Tokens.Spacing.x12)
+            .padding(.horizontal, Tokens.Spacing.x12.scale)
+            .padding(.vertical,   Tokens.Spacing.x12.scale)
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - Added: helpers
+    private func assetIcon(_ name: String) -> some View {
+        Image(name)
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+    }
+
+    // MARK: - Helpers
 
     private func openURL(_ url: URL) {
         UIApplication.shared.open(url, options: [:], completionHandler: nil)
     }
 
     private func openSupport() {
-        // Пытаемся mailto:, при неудаче — откроем сайт поддержки
         let mailto = URL(string: "mailto:\(supportEmail)")!
         if UIApplication.shared.canOpenURL(mailto) {
             UIApplication.shared.open(mailto, options: [:], completionHandler: nil)
@@ -2573,7 +2631,7 @@ struct SettingsScreen: View {
     }
 }
 
-// MARK: - Added: UIKit activity wrapper (внутри файла, чтобы не плодить слоёв)
+// MARK: - UIKit activity wrapper
 private struct ActivityView: UIViewControllerRepresentable {
     let activityItems: [Any]
     func makeUIViewController(context: Context) -> UIActivityViewController {
@@ -2750,193 +2808,226 @@ final class SearchViewModel: ObservableObject {
 //  FaceSearchView.swift
 //  CheaterBuster
 //
-//  Created by Niiaz Khasanov on 10/27/25.
+//  Created by Niiaz Khasanov on 11/01/25.
 //
 
 import SwiftUI
 import PhotosUI
+import Swinject
 import UIKit
-import Swinject // MARK: - Added
 
 struct FaceSearchView: View {
     @ObservedObject var vm: SearchViewModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.resolver) private var resolver // MARK: - Added
+    @Environment(\.resolver) private var resolver
 
     @State private var item: PhotosPickerItem?
     @State private var image: UIImage?
 
-    @State private var goResults = false
+    // Поворот/масштаб
+    @State private var rotationAngle: Angle = .zero
+    @State private var userZoom: CGFloat = 1.0
+
     @State private var didAnalyze = false
-    @State private var showPaywall = false // MARK: - Added
+    @State private var showPaywall = false
+
+    let onFinished: () -> Void
+
+    init(vm: SearchViewModel, onFinished: @escaping () -> Void) {
+        self.vm = vm
+        self.onFinished = onFinished
+    }
 
     var body: some View {
         ZStack {
             Tokens.Color.backgroundMain.ignoresSafeArea()
 
-            VStack(spacing: Tokens.Spacing.x16) {
-                // Header
+            VStack(spacing: 0) {
+                // MARK: Header (как в Cheater)
                 HStack {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "arrow.left")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Tokens.Color.textPrimary)
-                            .padding(12)
-                            .background(
-                                Tokens.Color.surfaceCard,
-                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            )
-                            .apply(Tokens.Shadow.card)
+                    Button { dismiss() } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 44.scale, height: 44.scale)
+                                .shadow(color: Tokens.Color.shadowBlack7, radius: 12.scale, x: 0, y: 0)
+
+                            Image("backArrow")
+                                .resizable()
+                                .renderingMode(.template)
+                                .scaledToFit()
+                                .frame(width: 20.scale, height: 20.scale)
+                                .foregroundStyle(Color(hex: "#141414"))
+                        }
                     }
+                    .buttonStyle(.plain)
 
                     Spacer()
 
                     Text("Face search")
-                        .font(Tokens.Font.title)
-                        .foregroundStyle(Tokens.Color.textPrimary)
+                        .font(.system(size: 18.scale, weight: .medium))
+                        .foregroundStyle(Color(hex: "#141414"))
 
-                    Spacer().frame(width: 44)
+                    Spacer()
+                    Color.clear.frame(width: 44.scale, height: 44.scale)
                 }
-                .padding(.horizontal, Tokens.Spacing.x16)
-                .padding(.top, Tokens.Spacing.x16)
+                .padding(.horizontal, 16.scale)
+                .padding(.top, 16.scale)
 
-                // Preview
-                Group {
-                    if let img = image {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, Tokens.Spacing.x16)
-                            .padding(.top, Tokens.Spacing.x12)
-                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                    .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+                // MARK: Preview — идеальный AspectFit с учётом поворота
+                GeometryReader { geo in
+                    ZStack {
+                        if let uiImage = image {
+                            let baseW = uiImage.size.width
+                            let baseH = uiImage.size.height
+                            let deg = abs(Int(rotationAngle.degrees)) % 360
+                            let swap = (deg == 90 || deg == 270)
+                            let iw = swap ? baseH : baseW
+                            let ih = swap ? baseW : baseH
+                            let s = min(geo.size.width / iw, geo.size.height / ih)
+
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .frame(width: baseW, height: baseH)   // рисуем в исходном размере
+                                .rotationEffect(rotationAngle)
+                                .scaleEffect(s * userZoom)            // вписываем + пользовательский zoom
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .contentShape(Rectangle())
+                                .animation(.easeInOut(duration: 0.22), value: rotationAngle)
+                                .animation(.easeInOut(duration: 0.22), value: userZoom)
+                        } else {
+                            ContentUnavailableView(
+                                "Select a photo",
+                                systemImage: "photo",
+                                description: Text("Pick one image to search by face.")
                             )
-                    } else {
-                        ContentUnavailableView(
-                            "Select a photo",
-                            systemImage: "photo",
-                            description: Text("Pick one image to search by face.")
-                        )
-                        .padding(.horizontal, Tokens.Spacing.x16)
-                        .padding(.top, Tokens.Spacing.x32)
+                        }
                     }
                 }
 
-                Spacer(minLength: 0)
+                // MARK: Bottom controls — 4 кнопки в одном ряду, равные интервалы 24.scale
+                HStack(spacing: 24.scale) {
+                    ControlButton(asset: "rotateLeft") {
+                        withAnimation { rotationAngle -= .degrees(90) }
+                    }
+
+                    ControlButton(asset: "rotateRight") {
+                        withAnimation { rotationAngle += .degrees(90) }
+                    }
+
+                    ControlButton(asset: "resize") {
+                        withAnimation { userZoom = (abs(userZoom - 1.0) < 0.001) ? 1.2 : 1.0 }
+                    }
+
+                    NextButton {
+                        guard let img = image,
+                              let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
+
+                        let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                        guard isPremium else { showPaywall = true; return }
+
+                        didAnalyze = true
+                        vm.runImageSearch(jpegData: jpeg)
+                    }
+                    .disabled(image == nil || vm.isLoading)
+                }
+                .frame(maxWidth: .infinity, alignment: .center) // ✅ вся группа по центру
+                .padding(.horizontal, 24.scale)
+                .padding(.vertical, 20.scale)
+                .background(
+                    Tokens.Color.surfaceCard,
+                    ignoresSafeAreaEdges: .bottom
+                )
             }
         }
         .navigationBarBackButtonHidden(true)
 
-        // Bottom tools panel
-        .safeAreaInset(edge: .bottom) {
-            HStack(spacing: Tokens.Spacing.x16) {
-                CircleTool(system: "rotate.left")  { /* позже */ }
-                CircleTool(system: "rotate.right") { /* позже */ }
-                CircleTool(system: "crop")         { /* позже */ }
-
-                Spacer()
-
-                // Pink CTA →
-                Button {
-                    guard let img = image,
-                          let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
-                    // MARK: - Added (premium gate)
-                    let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
-                    guard isPremium else {
-                        showPaywall = true
-                        return
-                    }
-                    didAnalyze = true
-                    vm.runImageSearch(jpegData: jpeg)
-                } label: {
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 52, height: 52)
-                        .background(
-                            Tokens.Color.accent,
-                            in: Circle()
-                        )
-                        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-                }
-                .buttonStyle(.plain)
-                .disabled(image == nil || vm.isLoading)
-            }
-            .padding(.horizontal, Tokens.Spacing.x20)
-            .padding(.vertical, Tokens.Spacing.x16)
-            .background(
-                Tokens.Color.surfaceCard,
-                ignoresSafeAreaEdges: .bottom
-            )
-        }
-
         // Photos picker
-        .photosPicker(isPresented: Binding(
-            get: { image == nil && item == nil }, set: { _ in }
-        ), selection: $item, matching: .images)
-
+        .photosPicker(isPresented: Binding(get: { image == nil && item == nil }, set: { _ in }),
+                      selection: $item, matching: .images)
         .onChange(of: item) { _, newValue in
             Task { @MainActor in
                 guard let data = try? await newValue?.loadTransferable(type: Data.self),
                       let img = UIImage(data: data) else { return }
                 image = img
+                rotationAngle = .zero
+                userZoom = 1.0
             }
         }
 
-        // Навигация к результатам
+        // Завершение анализа → пушим результаты
         .onChange(of: vm.isLoading) { was, isNow in
             if didAnalyze && was == true && isNow == false {
                 didAnalyze = false
-                goResults = true
+                onFinished()
             }
         }
-        .navigationDestination(isPresented: $goResults) {
-            SearchResultsView(results: vm.results, mode: .face)
-        }
 
-        // Блокирующая "загрузка"
-        .fullScreenCover(
-            isPresented: Binding(
-                get: { vm.isBlockingLoading },
-                set: { _ in }
-            )
-        ) {
+        // Full-screen loading
+        .fullScreenCover(isPresented: Binding(get: { vm.isBlockingLoading }, set: { _ in })) {
             LoadingView(mode: .face, previewImage: image, cancelAction: nil)
                 .interactiveDismissDisabled(true)
         }
 
-        // MARK: - Added Paywall
+        // Paywall
         .fullScreenCover(isPresented: $showPaywall) {
             let paywallVM = resolver.resolve(PaywallViewModel.self)!
-            PaywallView(vm: paywallVM)
-                .presentationDetents([.large])
+            PaywallView(vm: paywallVM).presentationDetents([.large])
         }
     }
 }
 
-private struct CircleTool: View {
-    let system: String
+// MARK: - Универсальная кружковая кнопка 48×48 с белым фоном и тенью
+private struct ControlButton: View {
+    let asset: String
     let action: () -> Void
+
     var body: some View {
         Button(action: action) {
-            Image(systemName: system)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Tokens.Color.textPrimary)
-                .frame(width: 48, height: 48)
-                .background(
-                    Tokens.Color.backgroundMain,
-                    in: Circle()
-                )
-                .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+            ZStack {
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 48.scale, height: 48.scale)
+                    // две мягкие тени, чтобы фон был виден на белом баре
+                    .shadow(color: Tokens.Color.shadowBlack7, radius: 12.scale, x: 0, y: 0)
+                    .shadow(color: Tokens.Color.shadowBlack7.opacity(0.6), radius: 4.scale, x: 0, y: 0)
+
+                Image(asset)
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: 20.scale, height: 20.scale)
+                    .foregroundStyle(Color(hex: "#141414"))
+            }
         }
         .buttonStyle(.plain)
     }
 }
+
+// MARK: - Accent next button 48×48 с тенью, иконка 20×20
+private struct NextButton: View {
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(Tokens.Color.accent)
+                    .frame(width: 48.scale, height: 48.scale)
+                    .shadow(color: Tokens.Color.shadowBlack7, radius: 12.scale, x: 0, y: 0)
+                    .shadow(color: Tokens.Color.shadowBlack7.opacity(0.6), radius: 4.scale, x: 0, y: 0)
+
+                Image("nextArrow")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: 20.scale, height: 20.scale)
+                    .foregroundStyle(.white)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+//
 //  SearchScreen.swift
 //  CheaterBuster
 //
@@ -2944,75 +3035,59 @@ private struct CircleTool: View {
 //
 
 import SwiftUI
+import Swinject
 
 struct SearchScreen: View {
-    // MARK: - Removed: goName (больше не нужен)
     @State private var goPhoto = false
-    private let vm: SearchViewModel
+    @State private var goResults = false
 
+    private let vm: SearchViewModel
     init(vm: SearchViewModel) { self.vm = vm }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: Tokens.Spacing.x16) {
+            VStack(alignment: .leading, spacing: 24.scale) {
                 Text("Find your partner")
-                    .font(Tokens.Font.h2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, Tokens.Spacing.x8)
+                    .font(.system(size: 28.scale, weight: .medium))
+                    .foregroundStyle(Color(hex: "#141414"))
+                    .padding(.top, Tokens.Spacing.x8.scale)
 
-                VStack(spacing: Tokens.Spacing.x12) {
-                    // MARK: - Removed: карточка текстового поиска
-                    // CardRow(icon: "text.magnifyingglass",
-                    //         title: "Search for a partner by name") { goName = true }
+                Button { goPhoto = true } label: {
+                    VStack(spacing: 16.scale) {
+                        Image("faceSearchIcon")
+                            .renderingMode(.original)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 40.scale, height: 40.scale)
 
-                    // Оставляем только поиск по фото
-                    CardRow(
-                        icon: "face.smiling",
-                        title: "Finding a partner by face"
-                    ) { goPhoto = true }
+                        Text("Finding a partner by face")
+                            .font(.system(size: 16.scale, weight: .regular))
+                            .foregroundStyle(Color(hex: "#141414"))
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 160.scale)
+                    .background(
+                        RoundedRectangle(cornerRadius: 22.scale, style: .continuous)
+                            .fill(Color.white)
+                    )
+                    .shadow(color: Color(hex: "#ACACAC").opacity(0.1),
+                            radius: 9.scale, y: 2.scale)
                 }
+                .buttonStyle(.plain)
 
                 Spacer()
             }
-            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.horizontal, Tokens.Spacing.x16.scale)
             .background(Tokens.Color.backgroundMain.ignoresSafeArea())
 
-            // MARK: - Removed: navigationDestination для NameSearchView
             .navigationDestination(isPresented: $goPhoto) {
-                FaceSearchView(vm: vm)
+                FaceSearchView(vm: vm, onFinished: { goResults = true })
+                    .navigationBarBackButtonHidden(true)
+            }
+            .navigationDestination(isPresented: $goResults) {
+                SearchResultsView(results: vm.results, mode: .face)
+                    .navigationBarBackButtonHidden(true)
             }
         }
-    }
-}
-
-private struct CardRow: View {
-    let icon: String
-    let title: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: Tokens.Spacing.x12) {
-                Image(systemName: icon)
-                    .frame(width: 28, height: 28)
-                    .foregroundStyle(Tokens.Color.accent)
-                    .background(
-                        Tokens.Color.accent.opacity(0.1),
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    )
-                Text(title)
-                    .foregroundStyle(Tokens.Color.textPrimary)
-                Spacer()
-            }
-            .padding(.vertical, Tokens.Spacing.x12)
-            .padding(.horizontal, Tokens.Spacing.x12)
-            .background(
-                Tokens.Color.surfaceCard,
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-            )
-            .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
-        }
-        .buttonStyle(.plain)
     }
 }
 //
@@ -4391,29 +4466,30 @@ struct SourcePickerOverlay: View {
     let onLibrary: () -> Void
     let onDismiss: () -> Void
 
-    // Анимации / drag-to-dismiss
     @State private var shown = false
     @GestureState private var dragY: CGFloat = 0
     @State private var isDismissing = false
     @State private var endDragY: CGFloat = 0
 
-    // Константы макета (используем с .scale при применении)
+    // Константы (все применяются с .scale)
     private let containerCorner: CGFloat = 32
     private let rowCorner: CGFloat = 22
     private let rowHeight: CGFloat = 52
     private let hPadding: CGFloat = 16
-    private let rowsGap: CGFloat = 12           // между строками — 12
-    private let titleTop: CGFloat = 24          // от верха окна до заголовка — 24
-    private let titleToFirstRow: CGFloat = 16   // между заголовком и первой строкой — 16
+    private let gapRows: CGFloat = 12
+    private let titleTop: CGFloat = 16
+    private let titleToFirstRow: CGFloat = 16
     private let iconSize: CGFloat = 24
 
-    // Порог/дистанции для жеста
+    private let handleWidth: CGFloat = 40
+    private let handleHeight: CGFloat = 4
+    private let sheetHeight: CGFloat = 218
+
     private var dismissThreshold: CGFloat { 140.scale }
     private var dismissTravel: CGFloat { 260.scale }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Подложка
             Color.black.opacity(backgroundOpacity)
                 .ignoresSafeArea()
                 .onTapGesture { dismissThen(from: 0) }
@@ -4424,6 +4500,7 @@ struct SourcePickerOverlay: View {
                 .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.9), value: dragY)
                 .animation(.easeOut(duration: 0.22), value: isDismissing)
                 .animation(.easeOut(duration: 0.20), value: shown)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
                 .gesture(
                     DragGesture(minimumDistance: 3.scale, coordinateSpace: .local)
                         .updating($dragY) { value, state, _ in
@@ -4444,9 +4521,8 @@ struct SourcePickerOverlay: View {
                 )
         }
         .onAppear { shown = true }
+        .ignoresSafeArea(edges: .bottom)
     }
-
-    // MARK: - Layout helpers
 
     private var sheetOffset: CGFloat {
         isDismissing ? (endDragY + dismissTravel) : ((shown ? 0 : 40.scale) + max(0, dragY))
@@ -4466,31 +4542,29 @@ struct SourcePickerOverlay: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { onDismiss() }
     }
 
-    private var safeBottomInset: CGFloat {
-        (UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.keyWindow?.safeAreaInsets.bottom }
-            .first ?? 0)
-    }
-
     // MARK: - Sheet
 
     private var sheet: some View {
-        VStack(spacing: 0) {
-            // Верхний "хэндл"
-            RoundedRectangle(cornerRadius: 2.scale, style: .continuous)
-                .fill(Tokens.Color.textSecondary.opacity(0.30))
-                .frame(width: 120.scale, height: 4.scale)
+        ZStack(alignment: .top) {
+            RoundedRectangle(cornerRadius: containerCorner.scale, style: .continuous)
+                .fill(Tokens.Color.backgroundMain)
+
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Spacer(minLength: 0)
+                    RoundedRectangle(cornerRadius: 2.scale, style: .continuous)
+                        .fill(Tokens.Color.textSecondary.opacity(0.30))
+                        .frame(width: handleWidth.scale, height: handleHeight.scale)
+                    Spacer(minLength: 0)
+                }
                 .padding(.top, 8.scale)
 
-            // Контент
-            VStack(alignment: .leading, spacing: 0) {
-                // Заголовок
                 Text("Select a photo or file")
                     .font(Tokens.Font.title)
                     .foregroundColor(Tokens.Color.textPrimary)
                     .padding(.top, titleTop.scale)
+                    .padding(.horizontal, hPadding.scale)
 
-                // Первая строка — отступ 16 от заголовка
                 SourceRow(
                     title: "Files",
                     imageName: "ic_files_outline",
@@ -4502,8 +4576,8 @@ struct SourcePickerOverlay: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) { onFiles() }
                 }
                 .padding(.top, titleToFirstRow.scale)
+                .padding(.horizontal, hPadding.scale)
 
-                // Вторая строка — gap 12
                 SourceRow(
                     title: "Library",
                     imageName: "ic_library_outline",
@@ -4514,20 +4588,13 @@ struct SourcePickerOverlay: View {
                     dismissThen(from: 0)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) { onLibrary() }
                 }
-                .padding(.top, rowsGap.scale)
+                .padding(.top, gapRows.scale)
+                .padding(.horizontal, hPadding.scale)
             }
-            .padding(.horizontal, hPadding.scale)
-            .padding(.bottom, 0) // внутри — без лишнего нижнего паддинга
         }
-        .frame(maxWidth: .infinity, alignment: .bottom)
-        .background(
-            RoundedRectangle(cornerRadius: containerCorner.scale, style: .continuous)
-                .fill(Tokens.Color.backgroundMain)
-                .padding(.horizontal, 0) // без бордера
-        )
-        .apply(Tokens.Shadow.card) // только токенная тень
-        .padding(.horizontal, 12.scale)
-        .padding(.bottom, safeBottomInset + 8.scale) // окно сидит на 8 над home bar
+        .frame(maxWidth: .infinity)
+        .frame(height: sheetHeight.scale, alignment: .top)
+        .apply(Tokens.Shadow.card)
     }
 }
 
@@ -4553,20 +4620,15 @@ private struct SourceRow: View {
                     .font(Tokens.Font.bodyMedium18)
                     .foregroundColor(Tokens.Color.textPrimary)
 
-                Spacer()
+                Spacer(minLength: 0)
             }
             .frame(height: rowHeight)
-            .padding(.horizontal, 12.scale)
+            .padding(.horizontal, 16.scale)
             .background(
                 RoundedRectangle(cornerRadius: rowCorner, style: .continuous)
                     .fill(Tokens.Color.surfaceCard)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: rowCorner, style: .continuous)
-                            .stroke(Tokens.Color.borderNeutral.opacity(0.40), lineWidth: 1.scale)
-                    )
-                    // Две мягкие тени (чтобы карточки "поднимались", как в макете)
-                    .shadow(color: Color.black.opacity(0.10), radius: 5.scale, x: 0, y: 2.scale)
-                    .shadow(color: Color.black.opacity(0.09), radius: 9.scale, x: 0, y: 9.scale)
+                    // MARK: - Changed: мягкая тень, без смещения
+                    .shadow(color: .black.opacity(0.06), radius: 6.scale, x: 0, y: 0)
             )
         }
         .buttonStyle(.plain)
@@ -4583,6 +4645,7 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 import Swinject
+import UIKit // для TabBarAnimator
 
 struct CheaterView: View {
     @ObservedObject var vm: CheaterViewModel
@@ -4605,14 +4668,17 @@ struct CheaterView: View {
     // Paywall
     @State private var showPaywall = false
 
-    // Bottom sheet
+    // Bottom sheet (overlay)
     @State private var showSourceSheet = false
 
-    // Превью изображения, чтобы показывать и на экране прогресса
+    // Кеши выбора
     @State private var lastPreviewImage: UIImage? = nil
+    @State private var lastFileName: String? = nil
+    @State private var lastFileData: Data? = nil
 
     private enum CheaterRoute: Hashable {
         case imagePreview
+        case filePreview
         case uploading
         case result
     }
@@ -4621,6 +4687,9 @@ struct CheaterView: View {
     @State private var routedResult: TaskResult? = nil
 
     init(vm: CheaterViewModel) { self.vm = vm }
+
+    // MARK: - Helpers
+    private var isFileContext: Bool { lastPreviewImage == nil && lastFileName != nil }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -4633,13 +4702,11 @@ struct CheaterView: View {
             .navigationTitle(navigationTitle)
             .toolbar(.hidden, for: .navigationBar)
 
-            // --- Pickers
+            // Pickers
             .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
-            .fileImporter(
-                isPresented: $showFilePicker,
-                allowedContentTypes: [.pdf, .png, .jpeg, .plainText],
-                allowsMultipleSelection: false
-            ) { result in
+            .fileImporter(isPresented: $showFilePicker,
+                          allowedContentTypes: [.pdf, .png, .jpeg, .plainText],
+                          allowsMultipleSelection: false) { result in
                 switch result {
                 case .success(let urls):
                     guard let url = urls.first else { return }
@@ -4648,6 +4715,9 @@ struct CheaterView: View {
                     do {
                         let data = try Data(contentsOf: url)
                         vm.showFile(name: url.lastPathComponent, data: data)
+                        lastFileName = url.lastPathComponent
+                        lastFileData = data
+                        if path.last != .filePreview { path.append(.filePreview) }
                     } catch {
                         vm.presentError("Failed to read file: \(error.localizedDescription)")
                     }
@@ -4656,7 +4726,7 @@ struct CheaterView: View {
                 }
             }
 
-            // --- Фото -> UIImage
+            // Фото -> UIImage
             .onChange(of: photoItem) { item in
                 guard let item else { return }
                 Task {
@@ -4665,6 +4735,8 @@ struct CheaterView: View {
                         await MainActor.run {
                             vm.showImage(img)
                             lastPreviewImage = img
+                            lastFileName = nil
+                            lastFileData = nil
                             path.append(.imagePreview)
                         }
                     } else {
@@ -4674,7 +4746,7 @@ struct CheaterView: View {
                 }
             }
 
-            // --- Saved alert
+            // Saved alert
             .onChange(of: vm.didSave) { _, saved in
                 guard saved else { return }
                 showSavedAlert = true
@@ -4684,46 +4756,33 @@ struct CheaterView: View {
                 Button("OK", role: .cancel) { }
             }
 
-            // --- Paywall
+            // Paywall
             .fullScreenCover(isPresented: $showPaywall) {
                 let paywallVM = resolver.resolve(PaywallViewModel.self)!
                 PaywallView(vm: paywallVM).presentationDetents([.large])
             }
 
-            // --- Bottom sheet
-            .overlay(alignment: .bottom) {
-                if showSourceSheet {
-                    SourcePickerOverlay(
-                        onFiles:  { showFilePicker = true },
-                        onLibrary:{ showPhotoPicker = true },
-                        onDismiss:{ showSourceSheet = false }
-                    )
-                }
-            }
-
-            // --- Навигация по состояниям VM
+            // Навигация по состояниям VM
             .onChange(of: vm.state) { _, newState in
                 switch newState {
-                case .uploading(let p):
-                    // пушим экран прогресса; свайп назад должен работать
+                case .previewFile(let name, let data):
+                    lastPreviewImage = nil
+                    lastFileName = name; lastFileData = data
+                    if path.last != .filePreview { path.append(.filePreview) }
+                case .uploading:
                     if path.last != .uploading { path.append(.uploading) }
-                    // (ничего больше не делаем — UI сам считает проценты)
                 case .result(let r):
-                    // показываем результат только по кнопке
-                    routedResult = r
-                default:
-                    break
+                    routedResult = r // откроем по кнопке
+                default: break
                 }
             }
 
-            // --- Возврат на корень => жёсткий сброс VM
+            // Сброс VM при возврате на корень
             .onChange(of: path) { _, newPath in
-                if newPath.isEmpty, vm.state != .idle {
-                    vm.goBackToIdle()
-                }
+                if newPath.isEmpty, vm.state != .idle { vm.goBackToIdle() }
             }
 
-            // --- Экраны
+            // Экраны
             .navigationDestination(for: CheaterRoute.self) { route in
                 switch route {
                 case .imagePreview:
@@ -4735,32 +4794,30 @@ struct CheaterView: View {
                         }
                     }
                     .navigationBarBackButtonHidden(true)
-                    // свайп-назад (кастомный) — на всякий случай, чтобы он точно работал
+                    .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
+
+                case .filePreview:
+                    Group {
+                        if let name = lastFileName, let data = lastFileData {
+                            filePreview(name: name, data: data)
+                        } else {
+                            VStack { Text("No file").foregroundColor(.red); Spacer() }
+                        }
+                    }
+                    .navigationBarBackButtonHidden(true)
                     .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
 
                 case .uploading:
-                    switch vm.state {
-                    case .uploading(let p):
-                        uploadingView(progress: p)
-                            .navigationBarBackButtonHidden(true)
-                            // свайп-назад (кастомный), без алёртов
-                            .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
-                    case .result:
-                        uploadingView(progress: 100)
-                            .navigationBarBackButtonHidden(true)
-                            .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
-                    default:
-                        uploadingView(progress: 0)
-                            .navigationBarBackButtonHidden(true)
-                            .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
-                    }
+                    uploadingScreen()
 
                 case .result:
                     if let r = routedResult {
                         CheaterResultView(
                             result: r,
                             onBack: { path.removeLast() },
-                            onSelectMessage: { withAnimation(.easeOut(duration: 0.2)) { showSourceSheet = true } }
+                            onSelectMessage: { withAnimation(.easeOut(duration: 0.2)) { showSourceSheet = true } },
+                            // MARK: - Added: корректный заголовок отчёта
+                            analysisTitle: (lastPreviewImage == nil && lastFileName != nil) ? "Files analysis" : "Image analysis"
                         )
                         .navigationBarBackButtonHidden(true)
                         .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
@@ -4772,18 +4829,31 @@ struct CheaterView: View {
                 }
             }
         }
-        // Включаем системный свайп (если у тебя подключён enableInteractivePop — оставь)
+        // overlay выбора источника
+        .overlay(alignment: .bottom) {
+            if showSourceSheet {
+                SourcePickerOverlay(
+                    onFiles:  { showSourceSheet = false; showFilePicker  = true },
+                    onLibrary:{ showSourceSheet = false; showPhotoPicker = true },
+                    onDismiss:{ showSourceSheet = false }
+                )
+                .zIndex(1000)
+                .ignoresSafeArea()
+                .onAppear { TabBarAnimator.set(slidDown: true) }
+                .onDisappear { TabBarAnimator.set(slidDown: false) }
+            }
+        }
+        .onChange(of: showSourceSheet) { _, isShown in TabBarAnimator.set(slidDown: isShown) }
+        .onDisappear { TabBarAnimator.set(slidDown: false) }
         .enableInteractivePop()
     }
 
-    // Корневой контент
+    // MARK: - Root content
     @ViewBuilder
     private var content: some View {
         switch vm.state {
-        case .idle:
-            idleView
-        default:
-            EmptyView()
+        case .idle: idleView
+        default: EmptyView()
         }
     }
 
@@ -4797,20 +4867,20 @@ struct CheaterView: View {
                 .padding(.horizontal, 16.scale)
             Spacer()
             PrimaryButton("Select message") {
-                withAnimation(.easeOut(duration: 0.2)) { showSourceSheet = true }
+                withAnimation(.easeInOut(duration: 0.25)) { showSourceSheet = true }
             }
         }
         .padding(.bottom, 24.scale)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
+    // MARK: - Image preview
     private func imagePreview(_ img: UIImage) -> some View {
         VStack(spacing: 0) {
-            header
+            header(title: "Image analysis")
             ScrollView {
                 VStack(spacing: 20.scale) {
-                    imageCard(image: img)
-                        .onAppear { lastPreviewImage = img }
+                    imageCard(image: img).onAppear { lastPreviewImage = img }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 8.scale)
@@ -4830,32 +4900,109 @@ struct CheaterView: View {
         .background(Tokens.Color.backgroundMain.ignoresSafeArea())
     }
 
-    // СТАРЫЙ ПРОГРЕСС-UI (вернул как просил)
-    private func uploadingView(progress p: Int) -> some View {
+    // MARK: - Files preview (центрирование)  // MARK: - Changed
+    private func filePreview(name: String, data: Data) -> some View {
         VStack(spacing: 0) {
-            header
-            ScrollView {
-                VStack(spacing: 20.scale) {
-                    if let img = lastPreviewImage {
-                        imageCard(image: img)
-                    }
-                    Text("\(p)%")
-                        .font(.system(size: 20, weight: .bold))
-                        .tracking(-0.20)
-                        .foregroundColor(Tokens.Color.textPrimary)
-                        .multilineTextAlignment(.center)
-                    ProgressBar(progress: max(0, min(1, Double(p) / 100.0)))
-                        .frame(width: 260.scale, height: 8.scale)
-                        .padding(.top, 8.scale)
+            header(title: "Files analysis")
+            VStack(spacing: 16.scale) {
+                Spacer(minLength: 0)
+
+                ZStack {
+                    RoundedRectangle(cornerRadius: 22.scale, style: .continuous)
+                        .fill(Color.white)
+                        .shadow(color: Color.black.opacity(0.06), radius: 8.scale, x: 0, y: 0)
+
+                    Image("ic_file_analysis_placeholder")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 64.scale, height: 64.scale)
+                        .accessibilityHidden(true)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 8.scale)
+                .frame(width: 112.scale, height: 112.scale)
+
+                Text(name)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(Color(hex: "#141414"))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .padding(.horizontal, 16.scale)
+
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 8.scale)
+
             VStack(spacing: 12.scale) {
-                PrimaryButton("View analysis report") {
-                    if path.last != .result {
-                        path.append(.result)
+                PrimaryButton("Analyse") {
+                    let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                    guard isPremium else { showPaywall = true; return }
+                    vm.showFile(name: name, data: data) // держим контекст файла
+                    vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
+                }
+            }
+            .padding(.horizontal, 16.scale)
+            .padding(.top, 16.scale)
+            .padding(.bottom, 24.scale)
+        }
+        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+    }
+
+    // MARK: - Uploading screen с карточкой и нижней зоной  // MARK: - Changed
+    @ViewBuilder
+    private func uploadingScreen() -> some View {
+        let p: Int = {
+            if case let .uploading(val) = vm.state { return val }
+            if case .result = vm.state { return 100 }
+            return 0
+        }()
+
+        VStack(spacing: 0) {
+            header(title: isFileContext ? "Files analysis" : "Image analysis") // меняем заголовок
+
+            // Центр: показываем карточку как на экране анализа
+            VStack(spacing: 16.scale) {
+                Spacer(minLength: 0)
+
+                if let img = lastPreviewImage {
+                    imageCard(image: img)
+                        .padding(.horizontal, 8.scale)
+                } else if let name = lastFileName {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 22.scale, style: .continuous)
+                            .fill(Color.white)
+                            .shadow(color: Color.black.opacity(0.06), radius: 8.scale, x: 0, y: 0)
+
+                        Image("ic_file_analysis_placeholder")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 64.scale, height: 64.scale)
                     }
+                    .frame(width: 112.scale, height: 112.scale)
+
+                    Text(name)
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(Color(hex: "#141414"))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .padding(.horizontal, 16.scale)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8.scale)
+
+            // Низ: проценты + ProgressBar + кнопка
+            VStack(spacing: 12.scale) {
+                Text("\(p)%")
+                    .font(.system(size: 20, weight: .bold))
+                    .tracking(-0.20)
+                    .foregroundColor(Tokens.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+
+                ProgressBar(progress: max(0, min(1, Double(p) / 100.0)))
+                    .frame(width: 260.scale, height: 8.scale)
+
+                PrimaryButton("View analysis report") {
+                    if path.last != .result { path.append(.result) }
                 }
                 .disabled(p < 100)
                 .opacity(p < 100 ? 0.6 : 1)
@@ -4865,19 +5012,18 @@ struct CheaterView: View {
             .padding(.bottom, 24.scale)
         }
         .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+        .navigationBarBackButtonHidden(true)
+        .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
     }
 
-    private var header: some View {
+    // MARK: - Общий заголовок
+    private func header(title: String) -> some View {
         HStack {
             BackButton(size: 44.scale) {
-                if !path.isEmpty {
-                    _ = path.popLast()
-                } else {
-                    vm.goBackToIdle()
-                }
+                if !path.isEmpty { _ = path.popLast() } else { vm.goBackToIdle() }
             }
             Spacer()
-            Text("Image analysis")
+            Text(title)
                 .font(.system(size: 18, weight: .medium))
                 .tracking(-0.18)
                 .foregroundColor(Tokens.Color.textPrimary)
@@ -4888,6 +5034,7 @@ struct CheaterView: View {
         .padding(.bottom, 12.scale)
     }
 
+    // MARK: - Вспомогательные
     private func imageCard(image: UIImage) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: Tokens.Radius.medium.scale, style: .continuous)
@@ -4909,30 +5056,6 @@ struct CheaterView: View {
         .padding(.horizontal, 8.scale)
     }
 
-    private func filePreview(name: String) -> some View {
-        VStack(spacing: Tokens.Spacing.x16) {
-            VStack(spacing: Tokens.Spacing.x12) {
-                Image(systemName: "folder")
-                    .resizable().scaledToFit()
-                    .frame(width: 112.scale, height: 112.scale)
-                    .foregroundColor(Tokens.Color.textSecondary)
-                Text(name)
-                    .font(Tokens.Font.body)
-                    .foregroundColor(Tokens.Color.textPrimary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.top, Tokens.Spacing.x16)
-
-            PrimaryButton("Analyse") {
-                let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
-                guard isPremium else { showPaywall = true; return }
-                vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
-            }
-
-            Spacer(minLength: 0)
-        }
-    }
-
     private func errorView(_ msg: String) -> some View {
         VStack(spacing: Tokens.Spacing.x16) {
             Text(msg).font(Tokens.Font.body).foregroundColor(.red).multilineTextAlignment(.center)
@@ -4945,39 +5068,37 @@ struct CheaterView: View {
     private var navigationTitle: String {
         switch vm.state {
         case .idle: return "Cheater"
-        case .previewImage, .previewFile, .uploading, .result, .error: return "Image analysis"
+        case .previewImage, .previewFile, .uploading, .result, .error:
+            return isFileContext ? "Files analysis" : "Image analysis" // MARK: - Changed
         }
     }
 }
-//  Presentation/Cheater/Result/CheaterResultView.swift
+//
+//  CheaterResultView.swift
 //  CheaterBuster
 //
-//  Updated: use *Card components only*, supports init(result:) and init(record:)
-//  Spacing: 16.scale sides, 16.scale from headings to cards, 8.scale between cards,
-//           32.scale between sections. Ring 120×120.scale, lineWidth handled in RiskRingView.
+//  Created by Niiaz Khasanov on 10/28/25.
+//
 
 import SwiftUI
 
-// MARK: - Internal Screen Model
 private struct ResultModel: Equatable {
     let riskScore: Int
     let redFlags: [String]
     let recommendations: [String]
 }
 
-// MARK: - View
 struct CheaterResultView: View {
-
-    // Inputs
     private let model: ResultModel
     private let onBack: () -> Void
     private let onSelectMessage: () -> Void
+    private let analysisTitle: String
 
-    // MARK: Inits (work both from live result and from history)
     init(
         result: TaskResult,
         onBack: @escaping () -> Void = {},
-        onSelectMessage: @escaping () -> Void = {}
+        onSelectMessage: @escaping () -> Void = {},
+        analysisTitle: String = "Image analysis"
     ) {
         self.model = .init(
             riskScore: result.risk_score,
@@ -4986,12 +5107,14 @@ struct CheaterResultView: View {
         )
         self.onBack = onBack
         self.onSelectMessage = onSelectMessage
+        self.analysisTitle = analysisTitle
     }
 
     init(
         record: CheaterRecord,
         onBack: @escaping () -> Void = {},
-        onSelectMessage: @escaping () -> Void = {}
+        onSelectMessage: @escaping () -> Void = {},
+        analysisTitle: String = "Image analysis"
     ) {
         self.model = .init(
             riskScore: record.riskScore,
@@ -5000,17 +5123,15 @@ struct CheaterResultView: View {
         )
         self.onBack = onBack
         self.onSelectMessage = onSelectMessage
+        self.analysisTitle = analysisTitle
     }
 
-    // MARK: - Body
     var body: some View {
         VStack(spacing: 0) {
             header
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-
-                    // MARK: Summary (title + subtitle + ring + legend)
                     summaryBlock
                         .padding(.horizontal, 16.scale)
                         .padding(.top, 8.scale)
@@ -5018,7 +5139,7 @@ struct CheaterResultView: View {
                     // MARK: Red flags
                     if !model.redFlags.isEmpty {
                         Text("Red flasg")
-                            .font(.system(size: 18.scale, weight: .medium)) // medium 18
+                            .font(.system(size: 18.scale, weight: .medium))
                             .tracking(-0.18)
                             .foregroundStyle(Tokens.Color.textPrimary)
                             .padding(.horizontal, 16.scale)
@@ -5034,17 +5155,18 @@ struct CheaterResultView: View {
                         }
                         .padding(.horizontal, 16.scale)
                         .padding(.top, 16.scale)
+                        .padding(.bottom, 32.scale) // ← Added: отступ вниз перед блоком Recommendations
                     }
 
-                    // Gap between sections
-                    if !model.redFlags.isEmpty, !model.recommendations.isEmpty {
-                        Spacer().frame(height: 32.scale)
+                    // MARK: Если флагов нет, даём отступ от легенды к “Recommendations”
+                    if model.redFlags.isEmpty && !model.recommendations.isEmpty {
+                        Spacer().frame(height: 24.scale) // ← Added ранее: кейс без RedFlags
                     }
 
                     // MARK: Recommendations
                     if !model.recommendations.isEmpty {
                         Text("Recommendations")
-                            .font(.system(size: 18, weight: .medium)) // medium 18
+                            .font(.system(size: 18, weight: .medium))
                             .tracking(-0.18)
                             .foregroundStyle(Tokens.Color.textPrimary)
                             .padding(.horizontal, 16.scale)
@@ -5061,10 +5183,11 @@ struct CheaterResultView: View {
                         .padding(.top, 16.scale)
                     }
 
-                    // CTA
-                    PrimaryButton("Select message") { onSelectMessage() }
-                        .padding(.horizontal, 16.scale)
-                        .padding(.vertical, 24.scale)
+                    PrimaryButton("Select message") {
+                        onSelectMessage()
+                    }
+                    .padding(.horizontal, 16.scale)
+                    .padding(.vertical, 24.scale)
                 }
             }
             .background(Tokens.Color.backgroundMain.ignoresSafeArea())
@@ -5072,21 +5195,16 @@ struct CheaterResultView: View {
         .navigationBarHidden(true)
     }
 
-    // MARK: Header
+    // MARK: - Header
     private var header: some View {
         HStack(spacing: 0) {
             BackButton(size: 44.scale, action: onBack)
-
             Spacer()
-
-            Text("Image analysis")
-                .font(.system(size: 18.scale, weight: .medium)) // medium 18
+            Text(analysisTitle)
+                .font(.system(size: 18.scale, weight: .medium))
                 .tracking(-0.18)
                 .foregroundStyle(Tokens.Color.textPrimary)
-
             Spacer()
-
-            // symmetry spacer
             Color.clear.frame(width: 44.scale, height: 44.scale)
         }
         .padding(.horizontal, 16.scale)
@@ -5095,13 +5213,13 @@ struct CheaterResultView: View {
         .background(Tokens.Color.backgroundMain)
     }
 
-    // MARK: Summary block (title, subtitle, ring, legend)
+    // MARK: - Summary Block
     private var summaryBlock: some View {
         VStack(spacing: 0) {
-            // Title + green tick (24×24.scale)
+            // Title + icon
             HStack(alignment: .center, spacing: 8.scale) {
                 Text("Risk analysis complete")
-                    .font(.system(size: 22, weight: .medium)) // medium 22
+                    .font(.system(size: 22, weight: .medium))
                     .tracking(-0.22)
                     .foregroundStyle(Tokens.Color.textPrimary)
 
@@ -5113,28 +5231,28 @@ struct CheaterResultView: View {
             }
             .frame(maxWidth: .infinity, alignment: .center)
 
-            // 1) Между title и subtitle — 8.scale
+            // Subtitle
             Text(detectedSubtitle(for: model.riskScore))
-                .font(.system(size: 16, weight: .medium)) // medium 16
+                .font(.system(size: 16, weight: .medium))
                 .tracking(-0.16)
                 .foregroundStyle(Tokens.Color.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.top, 8.scale)
 
-            // 2) Между subtitle и кольцом — 24.scale
+            // Ring
             RiskRingView(percent: model.riskScore)
                 .frame(width: 120.scale, height: 120.scale)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 24.scale)
 
-            // 3) Между кольцом и "High risk level" — 16.scale
+            // Risk level text
             Text(riskLevelLabel(for: model.riskScore))
-                .font(.system(size: 20.scale, weight: .regular)) // body 20
+                .font(.system(size: 20.scale, weight: .regular))
                 .tracking(-0.20)
                 .foregroundStyle(Tokens.Color.textSecondary)
                 .padding(.top, 16.scale)
 
-            // 4) Между "High risk level" и легендой — 16.scale
+            // Legend
             HStack(spacing: 24.scale) {
                 legendDot(.green, text: "Low")
                 legendDot(.yellow, text: "Medium")
@@ -5147,9 +5265,11 @@ struct CheaterResultView: View {
 
     private func legendDot(_ color: Color, text: String) -> some View {
         HStack(spacing: 8.scale) {
-            Circle().fill(color).frame(width: 20.scale, height: 20.scale)
+            Circle()
+                .fill(color)
+                .frame(width: 20.scale, height: 20.scale)
             Text(text)
-                .font(.system(size: 16.scale, weight: .medium)) // medium 16
+                .font(.system(size: 16.scale, weight: .medium))
                 .tracking(-0.16)
                 .foregroundStyle(Tokens.Color.textSecondary)
         }

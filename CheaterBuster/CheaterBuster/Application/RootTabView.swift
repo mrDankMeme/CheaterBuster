@@ -63,7 +63,7 @@ struct RootTabView: View {
                 set: { presented in if presented == false { hasOnboarded = true } }
             )
         ) { OnboardingView() }
-        .sheet(isPresented: $showRateUs) {
+        .fullScreenCover(isPresented: $showRateUs) {
             RateUsView(
                 imageName: "rateus_hand",
                 onLater: {
@@ -77,7 +77,7 @@ struct RootTabView: View {
             )
             .presentationDetents([.large])
         }
-        .sheet(isPresented: $showInitialPaywall) {
+        .fullScreenCover(isPresented: $showInitialPaywall) {
             let vm = resolver.resolve(PaywallViewModel.self)!
             PaywallView(vm: vm).presentationDetents([.large])
         }

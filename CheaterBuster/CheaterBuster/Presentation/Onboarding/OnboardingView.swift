@@ -8,10 +8,7 @@
 import SwiftUI
 
 struct OnboardingView: View {
-    // Один раз показываем онбординг
     @AppStorage("cb.hasOnboarded") private var hasOnboarded = false
-
-    /// index: 0 = splash, 1..slides.count = реальный слайд
     @State private var index: Int = 0
 
     struct Slide: Identifiable, Hashable {
@@ -44,7 +41,6 @@ struct OnboardingView: View {
             Tokens.Color.backgroundMain.ignoresSafeArea()
 
             if index == 0 {
-                // SPLASH (логотип по центру)
                 Image("onboarding_logo")
                     .resizable()
                     .scaledToFit()
@@ -52,30 +48,32 @@ struct OnboardingView: View {
                     .transition(.opacity)
                     .onAppear {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                index = 1
-                            }
+                            withAnimation(.easeInOut(duration: 0.25)) { index = 1 }
                         }
                     }
             } else {
                 VStack(spacing: 0) {
-                    // MARK: Progress (верхние капсулы как в макете)
                     StepProgress(current: index, total: slides.count)
                         .padding(.horizontal, 16)
                         .padding(.top, 8)
 
-                    // MARK: Контент слайдов
+                    Button("Skip") { finish() }
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Tokens.Color.textSecondary)
+                        .padding(.top, 20)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.trailing, 24)
+                        .accessibilityIdentifier("onboarding.skip")
+
                     TabView(selection: $index) {
                         ForEach(Array(slides.enumerated()), id: \.offset) { offset, slide in
                             SlideScreen(
                                 slide: slide,
-                                isLast: offset == slides.count - 1,
-                                onSkip: finish,
                                 onNext: {
                                     if offset == slides.count - 1 {
                                         finish()
                                     } else {
-                                        withAnimation { index = offset + 2 } // следующий tag
+                                        withAnimation { index = offset + 2 }
                                     }
                                 }
                             )
@@ -89,128 +87,105 @@ struct OnboardingView: View {
         }
     }
 
-    private func finish() {
-        hasOnboarded = true
-    }
+    private func finish() { hasOnboarded = true }
 }
 
-// MARK: - StepProgress (капсулы 3 шт., активная — цвет Accent)
+// MARK: - StepProgress
 private struct StepProgress: View {
-    let current: Int   // 1..total
+    let current: Int
     let total: Int
 
     var body: some View {
-        HStack(spacing: 16) {
-            ForEach(1...total, id: \.self) { step in
-                Capsule()
-                    .fill(step <= current ? Tokens.Color.accent : Tokens.Color.borderNeutral.opacity(0.25))
-                    .frame(height: 6)
-                    .overlay(
-                        Capsule().stroke(Tokens.Color.borderNeutral.opacity(0.0001), lineWidth: 1)
-                    )
+        GeometryReader { geo in
+            let spacing: CGFloat = 4
+            let available = geo.size.width - spacing * CGFloat(total - 1)
+            let segmentWidth = max(0, available / CGFloat(total))
+
+            HStack(spacing: spacing) {
+                ForEach(1...total, id: \.self) { step in
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(step <= current ? Tokens.Color.accent : Tokens.Color.borderNeutral.opacity(0.25))
+                        .frame(width: segmentWidth, height: 4)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 4)
     }
 }
 
-// MARK: - Слайд (верх: Skip; середина: иконка; низ: карточный блок с тенью)
+// MARK: - SlideScreen
 private struct SlideScreen: View {
     let slide: OnboardingView.Slide
-    let isLast: Bool
-    let onSkip: () -> Void
     let onNext: () -> Void
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .topTrailing) {
-                // Кнопка Skip справа сверху
-                Button("Skip") { onSkip() }
-                    .font(Tokens.Font.caption)
-                    .foregroundStyle(Tokens.Color.textSecondary)
-                    .padding(.trailing, 20)
-                    .padding(.top, 4)
-                    .accessibilityIdentifier("onboarding.skip")
+        VStack(spacing: 0) {
+            Spacer(minLength: 12)
 
-                VStack(spacing: 0) {
-                    Spacer(minLength: 12)
+            Image(slide.imageName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 354, height: 354)
+                .padding(.top, 8)
 
-                    // Иллюстрация: максимум 354pt, иначе 75% ширины
-                    let maxSide = min(geo.size.width * 0.75, 354)
-                    Image(slide.imageName)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: maxSide, height: maxSide)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 8)
-
-                    Spacer()
-
-                    // Нижний карточный блок — как в макете
-                    BottomCard {
-                        VStack(spacing: 12) {
-                            Text(slide.title)
-                                .font(Tokens.Font.h2)
-                                .multilineTextAlignment(.center)
-                                .foregroundStyle(Tokens.Color.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
-
-                            Text(slide.subtitle)
-                                .font(Tokens.Font.body)
-                                .multilineTextAlignment(.center)
-                                .foregroundStyle(Tokens.Color.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-
-                        PrimaryButton("Continue") {
-                            onNext()
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                        .padding(.bottom, 8)
-                    }
-                    .padding(.horizontal, 8) // чтобы тень красиво читалась на краях
-                    .padding(.bottom, 8)
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
+            Spacer(minLength: 0)
         }
-        .ignoresSafeArea(.keyboard)
+        .safeAreaInset(edge: .bottom) {
+            BottomCard(height: 232) {
+                VStack(spacing: 12) {
+                    Text(slide.title)
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(Tokens.Color.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing((1.3 * 22) - 22)
+
+                    Text(slide.subtitle)
+                        .font(Tokens.Font.body)
+                        .foregroundStyle(Tokens.Color.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(10_000)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 20)
+                
+
+                PrimaryButton("Continue") { onNext() }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16) // ← расстояние между текстом и кнопкой ровно 8pt
+            }
+            .padding(.horizontal, 0)
+            .padding(.bottom, 0)
+            .ignoresSafeArea(.container, edges: .bottom)
+        }
     }
 }
 
-// MARK: - Карточный нижний блок (скругление сверху, тень как в макете)
+// MARK: - BottomCard (фикс. высота 232pt, скругление только сверху)
 private struct BottomCard<Content: View>: View {
+    let height: CGFloat
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(spacing: 0) {
             content
+                .frame(maxHeight: .infinity, alignment: .top)
         }
-        .padding(.top, 16)
-        .padding(.bottom, 20)
+        .padding(.top, 42)
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
         .background(
-            Tokens.Color.surfaceCard,
-            in: UnevenRoundedRectangle(
-                topLeadingRadius: 28,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 28,
-                style: .continuous
-            )
-        )
-        .shadow(color: Tokens.Color.shadowBlack7, radius: 24, y: -2) // соответствует твоему ShadowBlack7 в палитре
-        .overlay(
             UnevenRoundedRectangle(
-                topLeadingRadius: 28,
+                topLeadingRadius: 32,
                 bottomLeadingRadius: 0,
                 bottomTrailingRadius: 0,
-                topTrailingRadius: 28,
+                topTrailingRadius: 32,
                 style: .continuous
             )
-            .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+            .fill(Tokens.Color.surfaceCard)
+            .shadow(color: Color.black.opacity(0.07), radius: 10, y: -2)
         )
+        .ignoresSafeArea(.container, edges: .bottom)
+        .accessibilityIdentifier("onboarding.bottomCard")
     }
 }
