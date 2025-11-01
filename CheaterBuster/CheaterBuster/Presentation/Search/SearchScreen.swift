@@ -16,7 +16,7 @@ struct SearchScreen: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 24.scale) { // ✅ Между заголовком и кнопкой 24pt
+            VStack(alignment: .leading, spacing: Tokens.Spacing.x16.scale) {
                 // MARK: - Заголовок
                 Text("Find your partner")
                     .font(.system(size: 28.scale, weight: .medium))
@@ -43,11 +43,8 @@ struct SearchScreen: View {
                         RoundedRectangle(cornerRadius: 22.scale, style: .continuous)
                             .fill(Color.white)
                     )
-                    .shadow(
-                        color: Color(hex: "#ACACAC").opacity(0.1),
-                        radius: 9.scale,
-                        y: 2.scale
-                    )
+                    .shadow(color: Color(hex: "#ACACAC").opacity(0.1),
+                            radius: 9.scale, y: 2.scale)
                 }
                 .buttonStyle(.plain)
 
