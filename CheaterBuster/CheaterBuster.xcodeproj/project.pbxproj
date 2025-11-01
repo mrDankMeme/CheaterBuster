@@ -96,6 +96,7 @@
 		A3B134C82EB5162900E9486A /* RecommendationCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134C72EB5162900E9486A /* RecommendationCard.swift */; };
 		A3B134D92EB577A700E9486A /* InteractivePopConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134D82EB577A700E9486A /* InteractivePopConfigurator.swift */; };
 		A3B134DB2EB57AA400E9486A /* EdgeSwipeCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134DA2EB57AA400E9486A /* EdgeSwipeCapture.swift */; };
+		A3B134E02EB6078000E9486A /* TabBarAnimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B134DF2EB6078000E9486A /* TabBarAnimator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -189,6 +190,7 @@
 		A3B134C72EB5162900E9486A /* RecommendationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendationCard.swift; sourceTree = "<group>"; };
 		A3B134D82EB577A700E9486A /* InteractivePopConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractivePopConfigurator.swift; sourceTree = "<group>"; };
 		A3B134DA2EB57AA400E9486A /* EdgeSwipeCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeSwipeCapture.swift; sourceTree = "<group>"; };
+		A3B134DF2EB6078000E9486A /* TabBarAnimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarAnimator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -433,6 +435,7 @@
 		A35FF3BD2EB225490000E890 /* Infrastucture */ = {
 			isa = PBXGroup;
 			children = (
+				A3B134DE2EB6077A00E9486A /* UI */,
 				A3B134D42EB5779000E9486A /* UIKit */,
 				A3B134982EB4CF2F00E9486A /* Permissions */,
 				A35FF3E72EB232A50000E890 /* Security */,
@@ -659,6 +662,14 @@
 			path = Navigation;
 			sourceTree = "<group>";
 		};
+		A3B134DE2EB6077A00E9486A /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				A3B134DF2EB6078000E9486A /* TabBarAnimator.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -765,6 +776,7 @@
 				A35FF37A2EB0E6910000E890 /* ImageHit.swift in Sources */,
 				A3B134A52EB4F36600E9486A /* Scalable.swift in Sources */,
 				A35FF3F72EB275CA0000E890 /* Notification+Names.swift in Sources */,
+				A3B134E02EB6078000E9486A /* TabBarAnimator.swift in Sources */,
 				A35FF3A42EB10B2C0000E890 /* Corner+Helpers.swift in Sources */,
 				A35FF3C02EB2257A0000E890 /* URLSessionHTTPClient.swift in Sources */,
 				A3B134B72EB5099A00E9486A /* ProgressBar.swift in Sources */,

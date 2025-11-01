@@ -1,3 +1,4 @@
+//
 //  SearchScreen.swift
 //  CheaterBuster
 //
@@ -5,9 +6,9 @@
 //
 
 import SwiftUI
+import Swinject
 
 struct SearchScreen: View {
-    // MARK: - Removed: goName (больше не нужен)
     @State private var goPhoto = false
     private let vm: SearchViewModel
 
@@ -15,64 +16,48 @@ struct SearchScreen: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: Tokens.Spacing.x16) {
+            VStack(alignment: .leading, spacing: 24.scale) { // ✅ Между заголовком и кнопкой 24pt
+                // MARK: - Заголовок
                 Text("Find your partner")
-                    .font(Tokens.Font.h2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, Tokens.Spacing.x8)
+                    .font(.system(size: 28.scale, weight: .medium))
+                    .foregroundStyle(Color(hex: "#141414"))
+                    .padding(.top, Tokens.Spacing.x8.scale)
 
-                VStack(spacing: Tokens.Spacing.x12) {
-                    // MARK: - Removed: карточка текстового поиска
-                    // CardRow(icon: "text.magnifyingglass",
-                    //         title: "Search for a partner by name") { goName = true }
+                // MARK: - Карточка
+                Button {
+                    goPhoto = true
+                } label: {
+                    VStack(spacing: 16.scale) {
+                        Image("faceSearchIcon") // добавь в Assets
+                            .renderingMode(.original)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 40.scale, height: 40.scale)
 
-                    // Оставляем только поиск по фото
-                    CardRow(
-                        icon: "face.smiling",
-                        title: "Finding a partner by face"
-                    ) { goPhoto = true }
+                        Text("Finding a partner by face")
+                            .font(.system(size: 16.scale, weight: .regular))
+                            .foregroundStyle(Color(hex: "#141414"))
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 160.scale)
+                    .background(
+                        RoundedRectangle(cornerRadius: 22.scale, style: .continuous)
+                            .fill(Color.white)
+                    )
+                    .shadow(
+                        color: Color(hex: "#ACACAC").opacity(0.1),
+                        radius: 9.scale,
+                        y: 2.scale
+                    )
                 }
+                .buttonStyle(.plain)
 
                 Spacer()
             }
-            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.horizontal, Tokens.Spacing.x16.scale)
             .background(Tokens.Color.backgroundMain.ignoresSafeArea())
-
-            // MARK: - Removed: navigationDestination для NameSearchView
             .navigationDestination(isPresented: $goPhoto) {
                 FaceSearchView(vm: vm)
             }
         }
-    }
-}
-
-private struct CardRow: View {
-    let icon: String
-    let title: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: Tokens.Spacing.x12) {
-                Image(systemName: icon)
-                    .frame(width: 28, height: 28)
-                    .foregroundStyle(Tokens.Color.accent)
-                    .background(
-                        Tokens.Color.accent.opacity(0.1),
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    )
-                Text(title)
-                    .foregroundStyle(Tokens.Color.textPrimary)
-                Spacer()
-            }
-            .padding(.vertical, Tokens.Spacing.x12)
-            .padding(.horizontal, Tokens.Spacing.x12)
-            .background(
-                Tokens.Color.surfaceCard,
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-            )
-            .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
-        }
-        .buttonStyle(.plain)
     }
 }

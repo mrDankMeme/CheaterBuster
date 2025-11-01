@@ -3915,31 +3915,24 @@ final class CheaterViewModel: ObservableObject {
             switch (lhs, rhs) {
             case (.idle, .idle):
                 return true
-
             case let (.previewImage(lImg), .previewImage(rImg)):
-                // ⚠️ UIImage не поддерживает Equatable.
-                // Можно сравнить по data или hash.
+                // ⚠️ UIImage не поддерживает Equatable — сравним по data.
                 return lImg.pngData() == rImg.pngData()
-
             case let (.previewFile(lName, lData), .previewFile(rName, rData)):
                 return lName == rName && lData == rData
-
-            case let (.uploading(lProgress), .uploading(rProgress)):
-                return lProgress == rProgress
-
-            case let (.result(lResult), .result(rResult)):
-                return lResult == rResult  // если TaskResult : Equatable
-
-            case let (.error(lMsg), .error(rMsg)):
-                return lMsg == rMsg
-
+            case let (.uploading(l), .uploading(r)):
+                return l == r
+            case let (.result(l), .result(r)):
+                return l == r
+            case let (.error(l), .error(r)):
+                return l == r
             default:
                 return false
             }
         }
     }
 
-    @Published  var state: State = .idle
+    @Published var state: State = .idle
 
     // E8: храним последний результат (для Save/Share)
     private var lastKind: CheaterRecord.Kind?
@@ -3954,6 +3947,9 @@ final class CheaterViewModel: ObservableObject {
     private let store: CheaterStore
     private let cfg: APIConfig
 
+    // MARK: - Added: управление текущим анализом
+    private var currentAnalysisTask: Task<Void, Never>? = nil
+
     init(auth: AuthRepository, api: CheaterAPI, poller: TaskPoller, store: CheaterStore, cfg: APIConfig) {
         self.auth = auth; self.api = api; self.poller = poller; self.store = store; self.cfg = cfg
     }
@@ -3964,29 +3960,44 @@ final class CheaterViewModel: ObservableObject {
     /// Публичный метод, чтобы экран мог показать ошибку, не трогая `state` напрямую.
     func presentError(_ message: String) { state = .error(message) }
 
-    /// Старт анализа, теперь **не** сохраняем авто в историю — ждём явного Save.
-    func analyseCurrent(conversation: String? = nil, apphudId: String) {
-        Task {
-            do {
-                try await auth.ensureAuthorized(apphudId: apphudId)
+    // MARK: - Added: отмена/сброс анализа
+    func cancelCurrentAnalysis() {
+        currentAnalysisTask?.cancel()
+        currentAnalysisTask = nil
+    }
 
-                switch state {
+    // MARK: - Changed: старт анализа теперь хранит Task и уважает отмену
+    func analyseCurrent(conversation: String? = nil, apphudId: String) {
+        // На всякий случай убьём предыдущий анализ, если был
+        cancelCurrentAnalysis()
+
+        currentAnalysisTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.auth.ensureAuthorized(apphudId: apphudId)
+
+                switch self.state {
                 case .previewImage(let img):
                     guard let data = img.jpegData(compressionQuality: 0.9) else { throw APIError.noData }
-                    try await runTask(files: [
-                        .init(name: "files", filename: "image.jpg", mimeType: "image/jpeg", data: data)
-                    ], conversation: conversation, kind: .image)
+                    try await self.runTask(
+                        files: [.init(name: "files", filename: "image.jpg", mimeType: "image/jpeg", data: data)],
+                        conversation: conversation,
+                        kind: .image
+                    )
 
                 case .previewFile(let name, let data):
-                    try await runTask(files: [
-                        .init(name: "files", filename: name, mimeType: mime(for: name), data: data)
-                    ], conversation: conversation, kind: .file)
+                    try await self.runTask(
+                        files: [.init(name: "files", filename: name, mimeType: self.mime(for: name), data: data)],
+                        conversation: conversation,
+                        kind: .file
+                    )
 
                 default:
                     break
                 }
             } catch {
-                presentError((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+                if Task.isCancelled { return } // MARK: - Added: уважение отмены
+                self.presentError((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
             }
         }
     }
@@ -4007,12 +4018,26 @@ final class CheaterViewModel: ObservableObject {
 
     // MARK: - Private
 
+    private func mime(for filename: String) -> String {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        switch ext {
+        case "jpg", "jpeg": return "image/jpeg"
+        case "png": return "image/png"
+        case "pdf": return "application/pdf"
+        case "txt": return "text/plain"
+        default: return "application/octet-stream"
+        }
+    }
+
     private func runTask(files: [MultipartFormData.FilePart], conversation: String?, kind: CheaterRecord.Kind) async throws {
+        if Task.isCancelled { return }                    // MARK: - Added
         state = .uploading(progress: 10)
 
         let created = try await api.createAnalyzeTask(files: files, conversation: conversation)
+        if Task.isCancelled { return }                    // MARK: - Added
         state = .uploading(progress: 35)
 
+        // Ожидание результата, с уважением отмены
         let final: TaskReadDTO
         switch created.status {
         case .finished, .failed:
@@ -4020,11 +4045,11 @@ final class CheaterViewModel: ObservableObject {
         default:
             final = try await poller.waitForAnalyzeResult(taskId: created.id, interval: 1.0)
         }
+        if Task.isCancelled { return }                    // MARK: - Added
 
         switch final.status {
         case .finished:
             if case .details(let r)? = final.result {
-                // E8: не сохраняем автоматически — показываем пользователю, а затем Save.
                 lastKind = kind
                 lastResult = r
                 state = .result(r)
@@ -4039,17 +4064,6 @@ final class CheaterViewModel: ObservableObject {
 
         default:
             presentError("Unexpected status: \(final.status)")
-        }
-    }
-
-    private func mime(for filename: String) -> String {
-        let ext = (filename as NSString).pathExtension.lowercased()
-        switch ext {
-        case "jpg","jpeg": return "image/jpeg"
-        case "png":        return "image/png"
-        case "pdf":        return "application/pdf"
-        case "txt":        return "text/plain"
-        default:           return "application/octet-stream"
         }
     }
 }
@@ -4224,15 +4238,19 @@ struct RiskRingView: View {
 
 import Foundation
 
-// MARK: - Added
+// MARK: - Changed: goBackToIdle теперь ещё и отменяет анализ
 extension CheaterViewModel {
-    /// Возвращает экран Cheater в начальное состояние (idle),
-    /// как будто пользователь нажал "назад" с предпросмотра.
+    /// Возвращает экран Cheater в начальное состояние (idle)
+    /// и корректно отменяет текущий анализ, если он ещё идёт.
     func goBackToIdle() {
+        cancelCurrentAnalysis() // MARK: - Added
         self.state = .idle
     }
 }
+
 import SwiftUI
+
+
 
 struct ProgressBar: View {
     let progress: Double // 0...1
@@ -4240,11 +4258,8 @@ struct ProgressBar: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                // Фон
                 Capsule(style: .continuous)
                     .fill(Tokens.Color.borderNeutral.opacity(0.35))
-
-                // Прогресс (заполняется пропорционально ширине)
                 Capsule(style: .continuous)
                     .fill(Tokens.Color.accent)
                     .frame(width: geo.size.width * CGFloat(clampedProgress))
@@ -4255,7 +4270,6 @@ struct ProgressBar: View {
         .clipShape(Capsule(style: .continuous))
     }
 
-    // MARK: - Helper
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
     }
@@ -4370,8 +4384,6 @@ struct BackButton: View {
 //  Created by Niiaz Khasanov on 10/31/25.
 //
 
-
-// Presentation/Cheater/Overlays/SourcePickerOverlay.swift
 import SwiftUI
 
 struct SourcePickerOverlay: View {
@@ -4379,17 +4391,29 @@ struct SourcePickerOverlay: View {
     let onLibrary: () -> Void
     let onDismiss: () -> Void
 
+    // Анимации / drag-to-dismiss
     @State private var shown = false
     @GestureState private var dragY: CGFloat = 0
-
     @State private var isDismissing = false
     @State private var endDragY: CGFloat = 0
 
+    // Константы макета (используем с .scale при применении)
+    private let containerCorner: CGFloat = 32
+    private let rowCorner: CGFloat = 22
+    private let rowHeight: CGFloat = 52
+    private let hPadding: CGFloat = 16
+    private let rowsGap: CGFloat = 12           // между строками — 12
+    private let titleTop: CGFloat = 24          // от верха окна до заголовка — 24
+    private let titleToFirstRow: CGFloat = 16   // между заголовком и первой строкой — 16
+    private let iconSize: CGFloat = 24
+
+    // Порог/дистанции для жеста
     private var dismissThreshold: CGFloat { 140.scale }
     private var dismissTravel: CGFloat { 260.scale }
 
     var body: some View {
         ZStack(alignment: .bottom) {
+            // Подложка
             Color.black.opacity(backgroundOpacity)
                 .ignoresSafeArea()
                 .onTapGesture { dismissThen(from: 0) }
@@ -4401,7 +4425,7 @@ struct SourcePickerOverlay: View {
                 .animation(.easeOut(duration: 0.22), value: isDismissing)
                 .animation(.easeOut(duration: 0.20), value: shown)
                 .gesture(
-                    DragGesture(minimumDistance: 3, coordinateSpace: .local)
+                    DragGesture(minimumDistance: 3.scale, coordinateSpace: .local)
                         .updating($dragY) { value, state, _ in
                             state = max(0, value.translation.height)
                         }
@@ -4422,16 +4446,19 @@ struct SourcePickerOverlay: View {
         .onAppear { shown = true }
     }
 
-    // MARK: layout helpers
+    // MARK: - Layout helpers
+
     private var sheetOffset: CGFloat {
         isDismissing ? (endDragY + dismissTravel) : ((shown ? 0 : 40.scale) + max(0, dragY))
     }
+
     private var backgroundOpacity: Double {
         if isDismissing { return 0 }
         let base: Double = 0.35
         let progress = max(0, 1 - Double(dragY / (dismissThreshold * 1.5)))
         return shown ? (base * progress) : 0
     }
+
     private func dismissThen(from currentDrag: CGFloat) {
         endDragY = currentDrag
         isDismissing = true
@@ -4439,78 +4466,108 @@ struct SourcePickerOverlay: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { onDismiss() }
     }
 
+    private var safeBottomInset: CGFloat {
+        (UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow?.safeAreaInsets.bottom }
+            .first ?? 0)
+    }
+
+    // MARK: - Sheet
+
     private var sheet: some View {
-        VStack(spacing: 16.scale) {
-            RoundedRectangle(cornerRadius: 3.scale)
-                .fill(Tokens.Color.borderNeutral.opacity(0.6))
-                .frame(width: 40.scale, height: 4.scale)
+        VStack(spacing: 0) {
+            // Верхний "хэндл"
+            RoundedRectangle(cornerRadius: 2.scale, style: .continuous)
+                .fill(Tokens.Color.textSecondary.opacity(0.30))
+                .frame(width: 120.scale, height: 4.scale)
                 .padding(.top, 8.scale)
 
-            Text("Select a photo or file")
-                .font(.system(size: 20, weight: .medium))
-                .tracking(-0.20)
-                .multilineTextAlignment(.center)
-                .padding(.bottom, 8.scale)
+            // Контент
+            VStack(alignment: .leading, spacing: 0) {
+                // Заголовок
+                Text("Select a photo or file")
+                    .font(Tokens.Font.title)
+                    .foregroundColor(Tokens.Color.textPrimary)
+                    .padding(.top, titleTop.scale)
 
-            VStack(spacing: 12.scale) {
-                SourceRow(systemImage: "folder", title: "Files") {
+                // Первая строка — отступ 16 от заголовка
+                SourceRow(
+                    title: "Files",
+                    imageName: "ic_files_outline",
+                    iconSize: iconSize.scale,
+                    rowHeight: rowHeight.scale,
+                    rowCorner: rowCorner.scale
+                ) {
                     dismissThen(from: 0)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) { onFiles() }
                 }
-                SourceRow(systemImage: "photo.on.rectangle.angled", title: "Library") {
+                .padding(.top, titleToFirstRow.scale)
+
+                // Вторая строка — gap 12
+                SourceRow(
+                    title: "Library",
+                    imageName: "ic_library_outline",
+                    iconSize: iconSize.scale,
+                    rowHeight: rowHeight.scale,
+                    rowCorner: rowCorner.scale
+                ) {
                     dismissThen(from: 0)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) { onLibrary() }
                 }
+                .padding(.top, rowsGap.scale)
             }
-            .padding(.horizontal, 16.scale)
-            .padding(.bottom, 16.scale)
+            .padding(.horizontal, hPadding.scale)
+            .padding(.bottom, 0) // внутри — без лишнего нижнего паддинга
         }
-        .frame(maxWidth: .infinity)
-        .background(Tokens.Color.surfaceCard,
-                    in: RoundedRectangle(cornerRadius: 28.scale, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 28.scale, style: .continuous)
-                .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+        .frame(maxWidth: .infinity, alignment: .bottom)
+        .background(
+            RoundedRectangle(cornerRadius: containerCorner.scale, style: .continuous)
+                .fill(Tokens.Color.backgroundMain)
+                .padding(.horizontal, 0) // без бордера
         )
-        .apply(Tokens.Shadow.card)
-        .padding(.horizontal, 8.scale)
-        .padding(.bottom, 8.scale)
+        .apply(Tokens.Shadow.card) // только токенная тень
+        .padding(.horizontal, 12.scale)
+        .padding(.bottom, safeBottomInset + 8.scale) // окно сидит на 8 над home bar
     }
 }
 
-struct SourceRow: View {
-    let systemImage: String
+// MARK: - Row
+
+private struct SourceRow: View {
     let title: String
+    let imageName: String
+    let iconSize: CGFloat
+    let rowHeight: CGFloat
+    let rowCorner: CGFloat
     let action: () -> Void
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12.scale) {
-                ZStack {
-                    Tokens.Color.backgroundMain
-                    Image(systemName: systemImage)
-                        .font(.system(size: 18.scale, weight: .semibold))
-                        .foregroundStyle(Tokens.Color.accent)
-                }
-                .frame(width: 44.scale, height: 44.scale)
-                .clipShape(RoundedRectangle(cornerRadius: 14.scale, style: .continuous))
+                Image(imageName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: iconSize, height: iconSize)
 
                 Text(title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .tracking(-0.16)
+                    .font(Tokens.Font.bodyMedium18)
+                    .foregroundColor(Tokens.Color.textPrimary)
 
                 Spacer()
             }
-            .padding(.vertical, 12.scale)
+            .frame(height: rowHeight)
             .padding(.horizontal, 12.scale)
             .background(
-                Tokens.Color.surfaceCard,
-                in: RoundedRectangle(cornerRadius: Tokens.Radius.medium.scale, style: .continuous)
+                RoundedRectangle(cornerRadius: rowCorner, style: .continuous)
+                    .fill(Tokens.Color.surfaceCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: rowCorner, style: .continuous)
+                            .stroke(Tokens.Color.borderNeutral.opacity(0.40), lineWidth: 1.scale)
+                    )
+                    // Две мягкие тени (чтобы карточки "поднимались", как в макете)
+                    .shadow(color: Color.black.opacity(0.10), radius: 5.scale, x: 0, y: 2.scale)
+                    .shadow(color: Color.black.opacity(0.09), radius: 9.scale, x: 0, y: 9.scale)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: Tokens.Radius.medium.scale, style: .continuous)
-                    .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
-            )
-            .apply(Tokens.Shadow.card)
         }
         .buttonStyle(.plain)
     }
@@ -4551,7 +4608,7 @@ struct CheaterView: View {
     // Bottom sheet
     @State private var showSourceSheet = false
 
-    // Сохраняем последнюю картинку для превью/загрузки
+    // Превью изображения, чтобы показывать и на экране прогресса
     @State private var lastPreviewImage: UIImage? = nil
 
     private enum CheaterRoute: Hashable {
@@ -4647,23 +4704,26 @@ struct CheaterView: View {
             // --- Навигация по состояниям VM
             .onChange(of: vm.state) { _, newState in
                 switch newState {
-                case .uploading:
+                case .uploading(let p):
+                    // пушим экран прогресса; свайп назад должен работать
                     if path.last != .uploading { path.append(.uploading) }
+                    // (ничего больше не делаем — UI сам считает проценты)
                 case .result(let r):
-                    routedResult = r // результат открываем ТОЛЬКО по кнопке
+                    // показываем результат только по кнопке
+                    routedResult = r
                 default:
                     break
                 }
             }
 
-            // --- Возврат на корень => idle
+            // --- Возврат на корень => жёсткий сброс VM
             .onChange(of: path) { _, newPath in
                 if newPath.isEmpty, vm.state != .idle {
                     vm.goBackToIdle()
                 }
             }
 
-            // --- Экран назначения
+            // --- Экраны
             .navigationDestination(for: CheaterRoute.self) { route in
                 switch route {
                 case .imagePreview:
@@ -4675,18 +4735,24 @@ struct CheaterView: View {
                         }
                     }
                     .navigationBarBackButtonHidden(true)
+                    // свайп-назад (кастомный) — на всякий случай, чтобы он точно работал
+                    .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
 
                 case .uploading:
                     switch vm.state {
                     case .uploading(let p):
                         uploadingView(progress: p)
                             .navigationBarBackButtonHidden(true)
+                            // свайп-назад (кастомный), без алёртов
+                            .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
                     case .result:
                         uploadingView(progress: 100)
                             .navigationBarBackButtonHidden(true)
+                            .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
                     default:
                         uploadingView(progress: 0)
                             .navigationBarBackButtonHidden(true)
+                            .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
                     }
 
                 case .result:
@@ -4697,18 +4763,20 @@ struct CheaterView: View {
                             onSelectMessage: { withAnimation(.easeOut(duration: 0.2)) { showSourceSheet = true } }
                         )
                         .navigationBarBackButtonHidden(true)
+                        .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
                     } else {
                         VStack { Text("No result").foregroundColor(.red); Spacer() }
                             .navigationBarBackButtonHidden(true)
+                            .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
                     }
                 }
             }
         }
-        // MARK: - Added: кастомный edge-swipe pop работает ВСЕГДА
-        .edgeSwipeToPop(isEnabled: !path.isEmpty) { _ = path.popLast() }
+        // Включаем системный свайп (если у тебя подключён enableInteractivePop — оставь)
+        .enableInteractivePop()
     }
 
-    // Корневой экран NavigationStack: показываем только idle
+    // Корневой контент
     @ViewBuilder
     private var content: some View {
         switch vm.state {
@@ -4751,9 +4819,8 @@ struct CheaterView: View {
                 PrimaryButton("Analyse") {
                     let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
                     guard isPremium else { showPaywall = true; return }
-                    if let img = lastPreviewImage { vm.showImage(img) } // гарантируем вход
+                    if let img = lastPreviewImage { vm.showImage(img) }
                     vm.analyseCurrent(conversation: conversationText, apphudId: "debug-apphud-id")
-                    // Дальше vm.state -> .uploading и мы пушим .uploading через onChange
                 }
             }
             .padding(.horizontal, 16.scale)
@@ -4763,6 +4830,7 @@ struct CheaterView: View {
         .background(Tokens.Color.backgroundMain.ignoresSafeArea())
     }
 
+    // СТАРЫЙ ПРОГРЕСС-UI (вернул как просил)
     private func uploadingView(progress p: Int) -> some View {
         VStack(spacing: 0) {
             header
@@ -4803,7 +4871,7 @@ struct CheaterView: View {
         HStack {
             BackButton(size: 44.scale) {
                 if !path.isEmpty {
-                    _ = path.popLast() // корретный pop; на корень — reset через onChange(path)
+                    _ = path.popLast()
                 } else {
                     vm.goBackToIdle()
                 }

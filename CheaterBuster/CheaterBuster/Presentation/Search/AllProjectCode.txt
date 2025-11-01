@@ -1,0 +1,666 @@
+//
+//  SearchViewModel.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import Foundation
+import Combine
+import UIKit
+
+final class SearchViewModel: ObservableObject {
+
+    // MARK: - Input
+    @Published var query: String = ""
+
+    // MARK: - Output
+    @Published private(set) var results: [ImageHit] = []
+    @Published private(set) var isLoading: Bool = false            // мелкие индикаторы (в кнопках)
+    @Published private(set) var isBlockingLoading: Bool = false     // full-screen загрузка
+    @Published private(set) var errorText: String?
+
+    // MARK: - Deps
+    private let search: SearchService
+    private let history: HistoryStore
+    // settings можно использовать позже (флаги, лимиты, т.п.)
+    private let settings: SettingsStore?
+
+    private var bag = Set<AnyCancellable>()
+
+    // MARK: - Init
+    init(search: SearchService,
+         history: HistoryStore,
+         settings: SettingsStore? = nil)
+    {
+        self.search = search
+        self.history = history
+        self.settings = settings
+        bindQueryDebounce()
+    }
+
+    // MARK: - Debounce по вводу (без блокирующей загрузки)
+    private func bindQueryDebounce() {
+        $query
+            .removeDuplicates()
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { [weak self] q -> AnyPublisher<[ImageHit], Never> in
+                guard let self, !q.isEmpty else { return Just([]).eraseToAnyPublisher() }
+                
+                return self.search.searchByName(q)
+                    .map { $0 }
+                    .catch { [weak self] err -> AnyPublisher<[ImageHit], Never> in
+                        self?.errorText = err.localizedDescription
+                        return Just([]).eraseToAnyPublisher()
+                    }
+                    .eraseToAnyPublisher()
+            }
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$results)
+    }
+
+    // MARK: - Явный запуск по кнопке «Find»
+    func runNameSearch() {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return }
+
+        isLoading = true
+        isBlockingLoading = true
+        errorText = nil
+
+        search.searchByName(q)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] completion in
+                guard let self else { return }
+                self.isLoading = false
+                self.isBlockingLoading = false
+                if case .failure(let err) = completion {
+                    self.errorText = err.localizedDescription
+                    self.results = []
+                }
+            } receiveValue: { [weak self] hits in
+                guard let self else { return }
+                self.results = hits
+
+                
+                let previewTitle  = hits.first?.title
+                let previewSource = hits.first?.source
+                let rec = HistoryRecord(
+                    kind: .name,
+                    query: q,
+                    imageJPEG: nil,
+                    titlePreview: previewTitle,
+                    sourcePreview: previewSource
+                )
+                self.history.add(rec)
+            }
+            .store(in: &bag)
+    }
+
+    // MARK: - Запуск по кнопке «Analyze» (по фото)
+    func runImageSearch(jpegData: Data) {
+        isLoading = true
+        isBlockingLoading = true
+        errorText = nil
+
+        search.searchByImage(jpegData)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] completion in
+                guard let self else { return }
+                self.isLoading = false
+                self.isBlockingLoading = false
+                if case .failure(let err) = completion {
+                    self.errorText = err.localizedDescription
+                    self.results = []
+                }
+            } receiveValue: { [weak self] hits in
+                guard let self else { return }
+                self.results = hits
+
+                
+                let thumbData = (UIImage(data: jpegData)?
+                    .jpegData(compressionQuality: 0.5)) ?? jpegData
+
+                let rec = HistoryRecord(
+                    kind: .face,
+                    query: nil,
+                    imageJPEG: thumbData,
+                    titlePreview: hits.first?.title,
+                    sourcePreview: hits.first?.source
+                )
+                self.history.add(rec)
+            }
+            .store(in: &bag)
+    }
+
+    // MARK: - Прочее (если нужно использовать)
+    func resetResults() {
+        results = []
+        errorText = nil
+    }
+}
+//
+//  FaceSearchView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/27/25.
+//
+
+import SwiftUI
+import PhotosUI
+import UIKit
+import Swinject // MARK: - Added
+
+struct FaceSearchView: View {
+    @ObservedObject var vm: SearchViewModel
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.resolver) private var resolver // MARK: - Added
+
+    @State private var item: PhotosPickerItem?
+    @State private var image: UIImage?
+
+    @State private var goResults = false
+    @State private var didAnalyze = false
+    @State private var showPaywall = false // MARK: - Added
+
+    var body: some View {
+        ZStack {
+            Tokens.Color.backgroundMain.ignoresSafeArea()
+
+            VStack(spacing: Tokens.Spacing.x16) {
+                // Header
+                HStack {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "arrow.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Tokens.Color.textPrimary)
+                            .padding(12)
+                            .background(
+                                Tokens.Color.surfaceCard,
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            )
+                            .apply(Tokens.Shadow.card)
+                    }
+
+                    Spacer()
+
+                    Text("Face search")
+                        .font(Tokens.Font.title)
+                        .foregroundStyle(Tokens.Color.textPrimary)
+
+                    Spacer().frame(width: 44)
+                }
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.top, Tokens.Spacing.x16)
+
+                // Preview
+                Group {
+                    if let img = image {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, Tokens.Spacing.x16)
+                            .padding(.top, Tokens.Spacing.x12)
+                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .stroke(Tokens.Color.borderNeutral, lineWidth: 1)
+                            )
+                    } else {
+                        ContentUnavailableView(
+                            "Select a photo",
+                            systemImage: "photo",
+                            description: Text("Pick one image to search by face.")
+                        )
+                        .padding(.horizontal, Tokens.Spacing.x16)
+                        .padding(.top, Tokens.Spacing.x32)
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+        }
+        .navigationBarBackButtonHidden(true)
+
+        // Bottom tools panel
+        .safeAreaInset(edge: .bottom) {
+            HStack(spacing: Tokens.Spacing.x16) {
+                CircleTool(system: "rotate.left")  { /* позже */ }
+                CircleTool(system: "rotate.right") { /* позже */ }
+                CircleTool(system: "crop")         { /* позже */ }
+
+                Spacer()
+
+                // Pink CTA →
+                Button {
+                    guard let img = image,
+                          let jpeg = img.jpegData(compressionQuality: 0.85) else { return }
+                    // MARK: - Added (premium gate)
+                    let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                    guard isPremium else {
+                        showPaywall = true
+                        return
+                    }
+                    didAnalyze = true
+                    vm.runImageSearch(jpegData: jpeg)
+                } label: {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 52, height: 52)
+                        .background(
+                            Tokens.Color.accent,
+                            in: Circle()
+                        )
+                        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                }
+                .buttonStyle(.plain)
+                .disabled(image == nil || vm.isLoading)
+            }
+            .padding(.horizontal, Tokens.Spacing.x20)
+            .padding(.vertical, Tokens.Spacing.x16)
+            .background(
+                Tokens.Color.surfaceCard,
+                ignoresSafeAreaEdges: .bottom
+            )
+        }
+
+        // Photos picker
+        .photosPicker(isPresented: Binding(
+            get: { image == nil && item == nil }, set: { _ in }
+        ), selection: $item, matching: .images)
+
+        .onChange(of: item) { _, newValue in
+            Task { @MainActor in
+                guard let data = try? await newValue?.loadTransferable(type: Data.self),
+                      let img = UIImage(data: data) else { return }
+                image = img
+            }
+        }
+
+        // Навигация к результатам
+        .onChange(of: vm.isLoading) { was, isNow in
+            if didAnalyze && was == true && isNow == false {
+                didAnalyze = false
+                goResults = true
+            }
+        }
+        .navigationDestination(isPresented: $goResults) {
+            SearchResultsView(results: vm.results, mode: .face)
+        }
+
+        // Блокирующая "загрузка"
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { vm.isBlockingLoading },
+                set: { _ in }
+            )
+        ) {
+            LoadingView(mode: .face, previewImage: image, cancelAction: nil)
+                .interactiveDismissDisabled(true)
+        }
+
+        // MARK: - Added Paywall
+        .fullScreenCover(isPresented: $showPaywall) {
+            let paywallVM = resolver.resolve(PaywallViewModel.self)!
+            PaywallView(vm: paywallVM)
+                .presentationDetents([.large])
+        }
+    }
+}
+
+private struct CircleTool: View {
+    let system: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Tokens.Color.textPrimary)
+                .frame(width: 48, height: 48)
+                .background(
+                    Tokens.Color.backgroundMain,
+                    in: Circle()
+                )
+                .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
+    }
+}
+//  SearchScreen.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+import SwiftUI
+
+struct SearchScreen: View {
+    // MARK: - Removed: goName (больше не нужен)
+    @State private var goPhoto = false
+    private let vm: SearchViewModel
+
+    init(vm: SearchViewModel) { self.vm = vm }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: Tokens.Spacing.x16) {
+                Text("Find your partner")
+                    .font(Tokens.Font.h2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, Tokens.Spacing.x8)
+
+                VStack(spacing: Tokens.Spacing.x12) {
+                    // MARK: - Removed: карточка текстового поиска
+                    // CardRow(icon: "text.magnifyingglass",
+                    //         title: "Search for a partner by name") { goName = true }
+
+                    // Оставляем только поиск по фото
+                    CardRow(
+                        icon: "face.smiling",
+                        title: "Finding a partner by face"
+                    ) { goPhoto = true }
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+
+            // MARK: - Removed: navigationDestination для NameSearchView
+            .navigationDestination(isPresented: $goPhoto) {
+                FaceSearchView(vm: vm)
+            }
+        }
+    }
+}
+
+private struct CardRow: View {
+    let icon: String
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Tokens.Spacing.x12) {
+                Image(systemName: icon)
+                    .frame(width: 28, height: 28)
+                    .foregroundStyle(Tokens.Color.accent)
+                    .background(
+                        Tokens.Color.accent.opacity(0.1),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                Text(title)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+                Spacer()
+            }
+            .padding(.vertical, Tokens.Spacing.x12)
+            .padding(.horizontal, Tokens.Spacing.x12)
+            .background(
+                Tokens.Color.surfaceCard,
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
+        }
+        .buttonStyle(.plain)
+    }
+}
+//
+//  NameSearchView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/29/25.
+//
+
+import SwiftUI
+import Swinject // MARK: - Added
+
+struct NameSearchView: View {
+    @ObservedObject var vm: SearchViewModel
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.resolver) private var resolver // MARK: - Added
+
+    @State private var goResults = false
+    @State private var didSubmit = false
+    @State private var showPaywall = false // MARK: - Added
+
+    var body: some View {
+        ZStack {
+            Tokens.Color.backgroundMain.ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: Tokens.Spacing.x16) {
+                // Header
+                HStack {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "arrow.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Tokens.Color.textPrimary)
+                            .padding(12)
+                            .background(
+                                Tokens.Color.surfaceCard,
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            )
+                            .apply(Tokens.Shadow.card)
+                    }
+
+                    Spacer()
+
+                    Text("Name search")
+                        .font(Tokens.Font.title)
+                        .foregroundStyle(Tokens.Color.textPrimary)
+
+                    Spacer().frame(width: 44) // симметрия
+                }
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.top, Tokens.Spacing.x16)
+
+                // Search field
+                VStack(spacing: Tokens.Spacing.x16) {
+                    SearchField("Partner's name...", text: $vm.query)
+                        .padding(.horizontal, Tokens.Spacing.x16)
+
+                    Spacer(minLength: Tokens.Spacing.x16)
+                }
+            }
+        }
+        .navigationBarBackButtonHidden(true)
+        .navigationBarTitleDisplayMode(.inline)
+
+        // Нижняя большая кнопка Find
+        .safeAreaInset(edge: .bottom) {
+            HStack {
+                PrimaryButton(
+                    "Find",
+                    isLoading: vm.isLoading,
+                    isDisabled: vm.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || vm.isLoading
+                ) {
+                    // MARK: - Added (premium gate)
+                    let isPremium = (resolver.resolve(PremiumStore.self)?.isPremium ?? false)
+                    guard isPremium else {
+                        showPaywall = true
+                        return
+                    }
+                    didSubmit = true
+                    vm.runNameSearch()
+                }
+            }
+            .padding(.horizontal, Tokens.Spacing.x16)
+            .padding(.vertical, Tokens.Spacing.x16)
+            .background(
+                Tokens.Color.backgroundMain,
+                ignoresSafeAreaEdges: .bottom
+            )
+        }
+
+        // Переход к результатам после завершения загрузки
+        .onChange(of: vm.isLoading) { was, isNow in
+            if didSubmit && was == true && isNow == false {
+                didSubmit = false
+                goResults = true
+            }
+        }
+        .navigationDestination(isPresented: $goResults) {
+            SearchResultsView(results: vm.results, mode: .name)
+        }
+
+        // Блокирующая "загрузка"
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { vm.isBlockingLoading },
+                set: { _ in }
+            )
+        ) {
+            LoadingView(mode: .name, previewImage: nil, cancelAction: nil)
+                .interactiveDismissDisabled(true)
+        }
+
+        // MARK: - Added Paywall
+        .fullScreenCover(isPresented: $showPaywall) {
+            let paywallVM = resolver.resolve(PaywallViewModel.self)!
+            PaywallView(vm: paywallVM)
+                .presentationDetents([.large])
+        }
+    }
+}
+//
+//  SearchResultsView.swift
+//  CheaterBuster
+//
+//  Created by Niiaz Khasanov on 10/28/25.
+//
+
+
+import SwiftUI
+
+struct SearchResultsView: View {
+    enum Mode { case face, name }
+
+    let results: [ImageHit]
+    let mode: Mode
+
+    private let columns = [
+        GridItem(.flexible(), spacing: Tokens.Spacing.x16),
+        GridItem(.flexible(), spacing: Tokens.Spacing.x16)
+    ]
+
+    @Namespace private var ns
+
+    var body: some View {
+        ScrollView {
+            if results.isEmpty {
+                ContentUnavailableView(
+                    "No results found",
+                    systemImage: "magnifyingglass.circle",
+                    description: Text("No matches found. Please try a different photo or name.")
+                )
+                .padding(.top, Tokens.Spacing.x24)
+            } else {
+                LazyVGrid(columns: columns, spacing: Tokens.Spacing.x16) {
+                    ForEach(results) { hit in
+                        if mode == .face {
+                            FaceResultCard(hit: hit)
+                        } else {
+                            NameResultCard(hit: hit)
+                        }
+                    }
+                }
+                .padding(.horizontal, Tokens.Spacing.x16)
+                .padding(.vertical, Tokens.Spacing.x24)
+                .animation(.easeInOut(duration: 0.25), value: results)
+            }
+        }
+        .background(Tokens.Color.backgroundMain.ignoresSafeArea())
+        .navigationTitle(mode == .face ? "Face results" : "Name results")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Cards
+
+private struct FaceResultCard: View {
+    let hit: ImageHit
+
+    var body: some View {
+        VStack(spacing: Tokens.Spacing.x8) {
+            AsyncThumb(url: hit.thumbnailURL)
+                .frame(height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Tokens.Color.surfaceCard,
+            in: RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+        )
+        .apply(Tokens.Shadow.card)
+    }
+}
+
+private struct NameResultCard: View {
+    let hit: ImageHit
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.Spacing.x8) {
+            AsyncThumb(url: hit.thumbnailURL)
+                .frame(height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(hit.title)
+                    .font(Tokens.Font.caption)
+                    .foregroundStyle(Tokens.Color.textPrimary)
+                    .lineLimit(1)
+                Text(hit.source)
+                    .font(Tokens.Font.captionRegular)
+                    .foregroundStyle(Tokens.Color.textSecondary)
+                    .lineLimit(1)
+            }
+
+            if let url = hit.linkURL {
+                Link(destination: url) {
+                    HStack(spacing: 4) {
+                        Text("Open")
+                        Image(systemName: "arrow.up.right.square")
+                    }
+                    .font(Tokens.Font.caption)
+                    .foregroundStyle(Tokens.Color.accent)
+                }
+                .padding(.top, Tokens.Spacing.x4)
+            }
+        }
+        .padding(Tokens.Spacing.x12)
+        .background(
+            Tokens.Color.surfaceCard,
+            in: RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+        )
+        .apply(Tokens.Shadow.card)
+    }
+}
+
+private struct AsyncThumb: View {
+    let url: URL?
+    var body: some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .empty:
+                ZStack { Color.gray.opacity(0.1); ProgressView() }
+            case .success(let image):
+                image.resizable().scaledToFill().clipped()
+            case .failure:
+                ZStack {
+                    Color.gray.opacity(0.2)
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(.gray)
+                }
+            @unknown default:
+                EmptyView()
+            }
+        }
+    }
+}
