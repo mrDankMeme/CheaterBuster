@@ -209,7 +209,7 @@ struct PaywallView: View {
             if isFeatured { return Tokens.Color.borderNeutral.opacity(0.6) }
             return Tokens.Color.borderNeutral.opacity(0.4)
         }()
-        let strokeWidth: CGFloat = isSelected ? 2 : (isFeatured ? 2 : 1)
+        let strokeWidth: CGFloat = isSelected ? 1 : (isFeatured ? 1 : 1)
 
         // Цвет бейджа #00C850
         let badgeFill = SwiftUI.Color(red: 0.0, green: 200.0/255.0, blue: 80.0/255.0)
