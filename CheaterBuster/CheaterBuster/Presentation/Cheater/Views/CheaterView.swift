@@ -179,7 +179,9 @@ struct CheaterView: View {
                         CheaterResultView(
                             result: r,
                             onBack: { path.removeLast() },
-                            onSelectMessage: { withAnimation(.easeOut(duration: 0.2)) { showSourceSheet = true } }
+                            onSelectMessage: { withAnimation(.easeOut(duration: 0.2)) { showSourceSheet = true } },
+                            // MARK: - Added: корректный заголовок отчёта
+                            analysisTitle: (lastPreviewImage == nil && lastFileName != nil) ? "Files analysis" : "Image analysis"
                         )
                         .navigationBarBackButtonHidden(true)
                         .edgeSwipeToPop(isEnabled: true) { _ = path.popLast() }
